@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONDWAY — Pedidos na praia</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--ink:#0B2A3C;--muted:#4A5A66;--sand:#F7F1E6;--line:#E6DCCB;--orange:#C2410C;--teal:#0E7490;--tealbg:#E3F2F5;--tealmid:#CDE6EC;--orangebg:#FDE7DA}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff;color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--teal)}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;position:relative;background:#fff}
+.pad{padding:20px}
+h1,h2,h3,.disp{font-family:Outfit,Inter,sans-serif}
+h1{margin:0;font-size:28px;font-weight:700;line-height:1.15}
+h2{margin:0;font-size:19px;font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.brand{font-family:Outfit,sans-serif;font-weight:700;font-size:20px;color:var(--teal);letter-spacing:-.02em}
+.stack{display:flex;flex-direction:column}
+.row{display:flex;align-items:center}
+.between{justify-content:space-between}
+.g4{gap:4px}.g6{gap:6px}.g8{gap:8px}.g10{gap:10px}.g12{gap:12px}.g16{gap:16px}.g20{gap:20px}.g24{gap:24px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;border-radius:14px;border:2px solid transparent;font:600 16px Inter,sans-serif;text-decoration:none;cursor:pointer;background:#fff;color:var(--ink);white-space:nowrap}
+.btn-block{display:flex;width:100%}
+.btn-lg{min-height:58px;font-family:Outfit,sans-serif;font-size:18px;border-radius:16px}
+.btn-primary{background:var(--orange);color:#fff}
+.btn-dark{background:var(--ink);color:#fff}
+.btn-teal{background:var(--teal);color:#fff}
+.btn-outline{border-color:var(--ink);background:#fff;color:var(--ink)}
+.btn-ghost{border-color:var(--line);background:#fff;color:var(--ink)}
+.btn-sm{min-height:44px;font-size:14px;padding:0 12px;border-radius:12px}
+.btn:disabled{opacity:.45;cursor:default}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.pill{min-height:44px;padding:0 16px;border-radius:999px;border:none;background:var(--sand);color:var(--ink);font:500 15px Inter,sans-serif;white-space:nowrap;cursor:pointer}
+.pill.on{background:var(--ink);color:#fff;font-weight:600}
+.opt{min-height:44px;padding:0 14px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink);font:500 14px Inter,sans-serif;cursor:pointer;white-space:nowrap}
+.opt.on{border-color:var(--teal);background:var(--tealbg);font-weight:700}
+.opt.solid.on{background:var(--teal);color:#fff}
+.card{border:1px solid var(--line);border-radius:16px;padding:16px}
+.card-strong{border:2px solid var(--ink);border-radius:18px;padding:16px}
+.input{width:100%;min-height:56px;border:2px solid var(--ink);border-radius:14px;padding:0 16px;font:400 18px Inter,sans-serif;color:var(--ink);background:#fff}
+.input.soft{border-color:var(--line);font-size:16px}
+textarea.input{padding:12px 14px;min-height:84px;font-size:16px;resize:none;line-height:1.4}
+.lbl{display:block;font-weight:600;font-size:15px;margin-bottom:8px}
+.foto{width:64px;height:64px;flex:none;border-radius:14px;background:#EADFCB;display:flex;align-items:center;justify-content:center;color:#8A7A60}
+.add{width:44px;height:44px;flex:none;border-radius:12px;border:none;background:var(--orange);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.acabou{opacity:.4}
+.acabou-tag{flex:none;background:var(--ink);color:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700}
+.tag{align-self:flex-start;font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.05em}
+.gschip{display:inline-flex;align-self:flex-start;align-items:center;gap:8px;background:var(--teal);color:#fff;padding:9px 16px;border-radius:999px;font-weight:600;font-size:16px}
+.loc{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--teal);font-weight:600}
+header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:4}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:12px 16px 20px;background:#fff;border-top:1px solid var(--line)}
+.bottom .inner{max-width:448px;margin:0 auto}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:5;background:#fff;border-top:1px solid var(--line);padding:6px 8px 14px}
+.nav .inner{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.nav button{background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:54px;justify-content:center;font:500 12px Inter,sans-serif;color:var(--muted);cursor:pointer;position:relative}
+.nav button.on{color:var(--orange);font-weight:700}
+.nav .dot{position:absolute;top:2px;left:calc(50% + 6px);min-width:20px;height:20px;border-radius:999px;background:var(--orange);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.space-nav{height:110px}
+.space-bar{height:110px}
+.gsgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;justify-items:center}
+.gs{width:56px;height:56px;border-radius:999px;border:2px solid #8A7A60;background:#fff;color:var(--muted);font:700 16px Inter,sans-serif;cursor:pointer}
+.gs.ocupado{background:var(--tealmid);border-color:var(--tealmid);color:var(--ink)}
+.gs.novo{background:var(--orange);border-color:var(--orange);color:#fff}
+.gs.conta{background:var(--ink);border-color:var(--ink);color:#fff}
+.gs.sel{outline:3px solid var(--teal);outline-offset:3px}
+.sw{width:14px;height:14px;border-radius:999px;display:inline-block}
+.banner{border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45}
+.banner.info{background:var(--sand)}
+.banner.ok{background:var(--tealbg);font-weight:600}
+.banner.warn{background:var(--orangebg)}
+.qr{display:flex;justify-content:center;align-items:center;padding:12px;background:#fff;border-radius:12px;min-height:60px}
+.qr img,.qr canvas{display:block}
+.line{display:flex;justify-content:space-between;gap:12px;font-size:15px}
+.hr{height:1px;background:var(--line)}
+.stepper{display:flex;align-items:center;gap:6px}
+.sbtn{width:44px;height:44px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.sbtn.dark{border-color:var(--ink);background:var(--ink);color:#fff}
+.sbtn.orange{border-color:var(--orange);background:var(--orange);color:#fff}
+.qtd{min-width:28px;text-align:center;font-weight:700;font-size:18px}
+.sec-t{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0}
+.toggle{width:112px;min-height:44px;border-radius:999px;border:2px solid var(--teal);background:var(--teal);color:#fff;font:700 14px Inter,sans-serif;cursor:pointer;flex:none}
+.toggle.off{background:#fff;color:var(--orange);border-color:var(--orange)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:130px;z-index:20;background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;max-width:90vw;text-align:center}
+.chamado{display:flex;align-items:center;gap:12px;border-radius:16px;padding:14px 14px 14px 16px}
+.chamado.conta{background:var(--ink);color:#fff}
+.chamado.garcom{background:var(--orangebg);border:1px solid #F3C4A6}
+.big-total{font-family:Outfit,sans-serif;font-weight:700;font-size:28px}
+.linkbtn{background:none;border:none;color:var(--teal);font:600 15px Inter,sans-serif;min-height:44px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast-slot" role="status" aria-live="polite"></div>
+<script>
+(function () {
+  // Endereço público deste teste (usado nos QR Codes).
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAF3xvHYyFGKgrgnMBGtstyXsnI44CJVrY",
+    authDomain: "ondway-8def5.firebaseapp.com",
+    projectId: "ondway-8def5",
+    storageBucket: "ondway-8def5.firebasestorage.app",
+    messagingSenderId: "128249073372",
+    appId: "1:128249073372:web:b62a78825d25e7ca62ee19"
+  };
+  // Cada barraca tem seu próprio código no link (?b=codigo). Sem código, usa a barraca de teste.
+  var BARRACA = (function () {
+    var m = (location.search || '').match(/[?&]b=([a-z0-9-]{1,40})/i);
+    return m ? m[1].toLowerCase() : 'teste';
+  })();
+  var ARTIFACT_URL = location.origin + location.pathname + '?b=' + BARRACA;
+
+  var app = document.getElementById('app');
+  var toastSlot = document.getElementById('toast-slot');
+
+  var LS = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+
+  // ---------- Ícones ----------
+  function svg(p, s, w) { return '<svg width="' + (s || 20) + '" height="' + (s || 20) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
+  var I = {
+    pin: function (s) { return svg('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle>', s); },
+    bell: function (s) { return svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>', s); },
+    receipt: function (s) { return svg('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="M8 8h8M8 12h8M8 16h5"></path>', s); },
+    plus: function (s) { return svg('<path d="M12 5v14M5 12h14"></path>', s || 22, 2.4); },
+    minus: function (s) { return svg('<path d="M5 12h14"></path>', s || 18, 2.4); },
+    img: function (s) { return svg('<rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3-3-9 9"></path>', s || 22); },
+    back: function (s) { return svg('<path d="m15 18-6-6 6-6"></path>', s || 20, 2.2); },
+    check: function (s) { return svg('<path d="M20 6 9 17l-5-5"></path>', s || 20, 2.6); },
+    list: function (s) { return svg('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path>', s || 22); },
+    map: function (s) { return svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path>', s || 22); },
+    menu: function (s) { return svg('<path d="M3 2v7c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2V2M6 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>', s || 22); },
+    qr: function (s) { return svg('<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"></path>', s || 22); },
+    sound: function (s) { return svg('<path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"></path>', s || 18); }
+  };
+
+  // ---------- Utilidades ----------
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function brl(n) { return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+  function minAgo(t) { var m = Math.floor((Date.now() - (t || 0)) / 60000); return m < 1 ? 'agora' : 'há ' + m + ' min'; }
+  function novoId() { return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function sidKey(n) { return 'ondway-sid-gs-' + n; }
+  function parsePreco(s) {
+    s = String(s || '').replace(/\s|R\$/g, '');
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    var v = parseFloat(s); return isNaN(v) ? NaN : Math.round(v * 100) / 100;
+  }
+  function agregar(pedidos) {
+    var m = {}, ordem = [];
+    pedidos.slice().sort(function (a, b) { return (a.criadoEm || 0) - (b.criadoEm || 0); }).forEach(function (p) {
+      (p.itens || []).forEach(function (it) {
+        var k = it.nome + '|' + (it.opcao || '');
+        if (!m[k]) { m[k] = { nome: it.nome, opcao: it.opcao || '', qtd: 0, valor: 0 }; ordem.push(k); }
+        m[k].qtd += Number(it.qtd) || 0; m[k].valor += (Number(it.qtd) || 0) * (Number(it.preco) || 0);
+      });
+    });
+    var linhas = ordem.map(function (k) { return m[k]; });
+    var total = linhas.reduce(function (s, x) { return s + x.valor; }, 0);
+    return { linhas: linhas, total: total };
+  }
+
+  // ---------- Estado ----------
+  var S = {
+    db: null, semDb: false, canWrite: null, erro: null, slow: false,
+    okCard: false, okSess: false, okPed: false, okCfg: false,
+    cardapio: [], sessoes: {}, pedidos: [],
+    config: { nome: 'Barraca Teste', guardasois: 12 },
+    route: { v: 'inicio' },
+    toast: null, busy: false, top: false,
+    // cliente
+    sid: null, nomeInput: LS.get('ondway-nome') || '', meuNome: LS.get('ondway-nome') || '',
+    cview: 'menu', cat: 'Tudo', opcaoSel: {}, cart: [], obs: '', enviado: false, pessoas: null,
+    // barraca
+    tab: 'pedidos', mapaSel: null, fecharGs: null, pagamento: 'Pix', somAtivo: false,
+    showNovo: false, ni: { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false },
+    confirmDel: null, cfgNome: null
+  };
+
+  function loading() { return !S.semDb && !S.erro && !(S.okCard && S.okSess && S.okPed && S.okCfg); }
+
+  function parseRoute() {
+    var h = (location.hash || '').replace(/^#/, '');
+    if (h === 'barraca') return { v: 'barraca' };
+    var m = h.match(/^gs-(\d{1,3})$/);
+    if (m) return { v: 'cliente', gs: parseInt(m[1], 10) };
+    return { v: 'inicio' };
+  }
+  function applyRoute() {
+    S.route = parseRoute();
+    S.fecharGs = null; S.top = true;
+    if (S.route.v === 'cliente') {
+      S.sid = LS.get(sidKey(S.route.gs));
+      S.cart = []; S.cview = 'menu'; S.cat = 'Tudo'; S.enviado = false; S.pessoas = null; S.obs = '';
+    }
+  }
+
+  // ---------- Toast ----------
+  var toastTimer = null;
+  function toast(msg) {
+    S.toast = msg;
+    toastSlot.innerHTML = '<div class="toast">' + esc(msg) + '</div>';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { S.toast = null; toastSlot.innerHTML = ''; }, 3200);
+  }
+
+  // ---------- Som ----------
+  var actx = null;
+  function ativarSom() {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.resume) actx.resume();
+      S.somAtivo = true; beep();
+    } catch (e) { toast('Este navegador não liberou o som.'); }
+    render();
+  }
+  function beep() {
+    try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) {}
+    if (!actx || !S.somAtivo) return;
+    try {
+      [0, 0.22].forEach(function (d) {
+        var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + d;
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.2);
+      });
+    } catch (e) {}
+  }
+
+  // ---------- Escrita ----------
+  function w(fn) {
+    if (!S.db) { toast('Sem conexão com o banco de dados.'); return Promise.resolve(false); }
+    return Promise.resolve().then(fn).then(function () { return true; }, function (e) {
+      if (window.console) console.error(e);
+      var code = e && e.code;
+      if (code === 'permission-denied') { toast('Sem permissão para salvar.'); }
+      else if (code === 'resource-exhausted') toast('Limite gratuito do banco de dados atingido por hoje.');
+      else toast('Não foi possível salvar. Tente de novo.');
+      render();
+      return false;
+    });
+  }
+
+  // ---------- Status ----------
+  function banners() {
+    var h = '';
+    if (S.semDb) h += '<div class="banner warn">Não foi possível conectar ao banco de dados. Verifique a internet e recarregue a página.</div>';
+    else if (S.erro) h += '<div class="banner warn">A conexão caiu (' + esc(S.erro) + '). Recarregue a página.</div>';
+    else if (loading() && S.slow) h += '<div class="banner warn">A conexão está lenta. Continuando a tentar…</div>';
+    return h;
+  }
+
+  // ---------- Telas: início ----------
+  function viewInicio() {
+    var url1 = ARTIFACT_URL + '#gs-1';
+    return '<div class="wrap pad stack g20" style="padding-top:28px">' +
+      '<div class="brand">ondway</div>' +
+      '<div class="stack g8"><h1>Teste ao vivo</h1><p class="muted" style="font-size:16px;line-height:1.5">Um celular faz o papel do dono da barraca. O outro faz o papel do cliente sentado no Guarda-sol 1.</p></div>' +
+      banners() +
+      '<div class="card stack g12"><p class="sec-t">1 · Neste celular</p><p style="font-size:16px">Abra o painel do dono da barraca.</p>' +
+      '<a class="btn btn-dark btn-lg btn-block" href="#barraca">Abrir painel da barraca</a></div>' +
+      '<div class="card stack g12"><p class="sec-t">2 · No outro celular</p><p style="font-size:16px">Aponte a câmera para o QR Code do Guarda-sol 1.</p>' +
+      '<div class="qr" data-qr="' + esc(url1) + '" data-size="200"></div>' +
+      '<p class="muted" style="font-size:12px;word-break:break-all;text-align:center">' + esc(url1) + '</p>' +
+      '<a class="btn btn-ghost btn-block" href="#gs-1">Ou abrir aqui como cliente</a></div>' +
+      '<div class="banner info">Não precisa instalar nada nem fazer login: o cliente só aponta a câmera.</div>' +
+      '</div>';
+  }
+
+  // ---------- Telas: cliente ----------
+  function viewCliente() {
+    var n = S.route.gs, sess = S.sessoes['gs-' + n];
+    if (!S.okSess) return '<div class="wrap pad stack g16" style="padding-top:28px"><div class="brand">ondway</div>' + banners() + '<p class="muted">Carregando…</p></div>';
+    var joined = S.sid && sess && sess.sid === S.sid;
+    if (joined && !sess.aberta) return viewEncerrada(n);
+    if (!joined || !sess.aberta) return viewBoasVindas(n, sess);
+    if (S.cview === 'carrinho') return viewCarrinho(n, sess);
+    if (S.cview === 'conta') return viewConta(n, sess);
+    return viewMenu(n, sess);
+  }
+
+  function viewBoasVindas(n, sess) {
+    var aberta = sess && sess.aberta;
+    return '<div class="wrap">' +
+      '<div class="stack g16" style="background:var(--sand);padding:28px 24px 30px;border-bottom:1px solid var(--line)">' +
+      '<div class="brand">ondway</div><h1 style="font-size:34px;line-height:1.1">' + esc(S.config.nome) + '</h1>' +
+      '<div class="gschip">' + I.pin(18) + ' Guarda-sol ' + n + '</div></div>' +
+      '<form data-form="entrar" class="pad stack g20" style="padding-top:28px">' + banners() +
+      '<div class="stack g8"><h2 style="font-size:24px">Que bom ter você aqui!</h2><p class="muted" style="font-size:16px;line-height:1.5">Peça direto do seu guarda-sol. A gente leva até você.</p></div>' +
+      (aberta ? '<div class="banner info">Este guarda-sol já tem uma conta aberta em nome de <strong>' + esc(sess.nome) + '</strong>. Seus pedidos entram na mesma conta.</div>' : '') +
+      '<div><label class="lbl" for="nome">Como podemos te chamar?</label><input class="input" id="nome" data-bind="nomeInput" value="' + esc(S.nomeInput) + '" placeholder="Seu nome" autocomplete="given-name" maxlength="40"></div>' +
+      '<div class="banner info row g10" style="align-items:flex-start"><span style="color:var(--teal);flex:none">' + I.receipt(20) + '</span><span>O pagamento é feito na barraca, quando você fechar a conta.</span></div>' +
+      '<button class="btn btn-primary btn-lg btn-block" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (aberta ? 'Entrar na conta' : 'Ver cardápio') + '</button>' +
+      '</form></div>';
+  }
+
+  function viewEncerrada(n) {
+    return '<div class="wrap pad stack g20" style="padding-top:40px">' +
+      '<div class="brand">ondway</div>' +
+      '<div class="stack g12"><div style="width:56px;height:56px;border-radius:999px;background:var(--tealbg);color:var(--teal);display:flex;align-items:center;justify-content:center">' + I.check(28) + '</div>' +
+      '<h1>Conta fechada</h1><p class="muted" style="font-size:16px;line-height:1.5">Obrigado pela visita à ' + esc(S.config.nome) + '. Volte sempre!</p></div>' +
+      '<button class="btn btn-outline btn-lg btn-block" data-a="novaConta">Começar uma nova conta</button></div>';
+  }
+
+  function headerCliente(n, sess, extra) {
+    return '<header class="top stack g12"><div class="row between g10">' +
+      '<div class="stack g4" style="min-width:0"><div class="disp" style="font-weight:700;font-size:20px">' + esc(S.config.nome) + '</div>' +
+      '<div class="loc">' + I.pin(16) + ' Guarda-sol ' + n + ' · ' + esc(sess.nome) + '</div></div>' +
+      '<div class="row g8">' +
+      '<button class="btn btn-outline btn-sm" data-a="chamar" data-t="garcom" aria-label="Chamar garçom">' + I.bell(18) + '</button>' +
+      '<button class="btn btn-outline btn-sm" data-a="cview" data-v="conta">' + I.receipt(18) + ' Conta</button>' +
+      '</div></div>' + (extra || '') + '</header>';
+  }
+
+  function categorias() {
+    var cats = ['Tudo'];
+    if (S.cardapio.some(function (i) { return i.destaque; })) cats.push('Destaques');
+    S.cardapio.forEach(function (i) { var c = i.cat || 'Outros'; if (cats.indexOf(c) < 0) cats.push(c); });
+    return cats;
+  }
+
+  function itemCliente(i, emDestaques) {
+    var acab = !!i.acabou, ops = Array.isArray(i.opcoes) ? i.opcoes : [], sel = S.opcaoSel[i.id] || ops[0];
+    var h = '<div class="stack g8" style="padding:12px 0;border-bottom:1px solid #F0E8DA">' +
+      '<div class="row g12"><div class="row g12' + (acab ? ' acabou' : '') + '" style="flex:1;min-width:0">' +
+      '<div class="foto" aria-hidden="true">' + I.img() + '</div>' +
+      '<div class="stack" style="gap:2px;min-width:0">' +
+      (i.destaque && !emDestaques ? '<span class="tag">Destaque</span>' : '') +
+      '<div style="font-weight:600;font-size:16px">' + esc(i.nome) + '</div>' +
+      (i.desc ? '<div class="muted" style="font-size:13px">' + esc(i.desc) + '</div>' : '') +
+      '<div style="font-weight:700;font-size:16px;margin-top:4px">' + brl(i.preco) + '</div></div></div>' +
+      (acab ? '<span class="acabou-tag">acabou :(</span>' : '<button class="add" data-a="add" data-id="' + esc(i.id) + '" aria-label="Adicionar ' + esc(i.nome) + '">' + I.plus() + '</button>') +
+      '</div>';
+    if (!acab && ops.length) {
+      h += '<div class="chips" role="group" aria-label="Opções de ' + esc(i.nome) + '" style="padding-left:76px">' +
+        ops.map(function (o) { return '<button class="opt' + (o === sel ? ' on' : '') + '" aria-pressed="' + (o === sel) + '" data-a="opcao" data-id="' + esc(i.id) + '" data-o="' + esc(o) + '">' + esc(o) + '</button>'; }).join('') + '</div>';
+    }
+    return h + '</div>';
+  }
+
+  function viewMenu(n, sess) {
+    var cats = categorias(), cat = cats.indexOf(S.cat) >= 0 ? S.cat : 'Tudo';
+    var chips = '<nav class="chips" aria-label="Categorias">' + cats.map(function (c) {
+      return '<button class="pill' + (c === cat ? ' on' : '') + '" data-a="cat" data-c="' + esc(c) + '">' + esc(c) + '</button>';
+    }).join('') + '</nav>';
+    var body = '';
+    if (!S.okCard) body = '<p class="muted">Carregando cardápio…</p>';
+    else if (!S.cardapio.length) body = '<div class="banner info">O cardápio ainda está vazio. O dono da barraca pode cadastrar os itens no painel.</div>';
+    else {
+      var secoes = [];
+      if (cat === 'Tudo') {
+        var dest = S.cardapio.filter(function (i) { return i.destaque; });
+        if (dest.length) secoes.push(['Destaques', dest, true]);
+        cats.slice(1).filter(function (c) { return c !== 'Destaques'; }).forEach(function (c) {
+          secoes.push([c, S.cardapio.filter(function (i) { return (i.cat || 'Outros') === c; }), false]);
+        });
+      } else if (cat === 'Destaques') {
+        secoes.push(['Destaques', S.cardapio.filter(function (i) { return i.destaque; }), true]);
+      } else {
+        secoes.push([cat, S.cardapio.filter(function (i) { return (i.cat || 'Outros') === cat; }), false]);
+      }
+      body = secoes.map(function (s) {
+        return '<section class="stack"><h2 style="margin-top:8px">' + esc(s[0]) + '</h2>' + s[1].map(function (i) { return itemCliente(i, s[2]); }).join('') + '</section>';
+      }).join('');
+    }
+    var qtd = S.cart.reduce(function (s, c) { return s + c.qtd; }, 0);
+    var tot = S.cart.reduce(function (s, c) { return s + c.qtd * c.preco; }, 0);
+    var bar = qtd ? '<div class="bottom"><div class="inner"><button class="btn btn-primary btn-lg btn-block" style="justify-content:space-between;padding:0 20px" data-a="cview" data-v="carrinho">' +
+      '<span class="row g10"><span style="min-width:28px;height:28px;border-radius:999px;background:#fff;color:var(--orange);display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;padding:0 6px">' + qtd + '</span>Ver pedido</span>' +
+      '<span>' + brl(tot) + '</span></button></div></div>' : '';
+    return '<div class="wrap">' + headerCliente(n, sess, chips) +
+      '<main class="stack" style="padding:8px 20px 20px">' + banners() + statusChamado(sess) + body + '</main>' +
+      (qtd ? '<div class="space-bar"></div>' : '') + bar + '</div>';
+  }
+
+  function statusChamado(sess) {
+    if (sess.chamado === 'garcom') return '<div class="banner warn" style="margin-top:8px">Você chamou o garçom. Ele já está indo.</div>';
+    if (sess.chamado === 'conta') return '<div class="banner warn" style="margin-top:8px">Você pediu para fechar a conta. O garçom vai até você.</div>';
+    return '';
+  }
+
+  function viewCarrinho(n, sess) {
+    var tot = S.cart.reduce(function (s, c) { return s + c.qtd * c.preco; }, 0);
+    var linhas = S.cart.map(function (c, idx) {
+      return '<div class="row g12" style="padding:14px 0;border-bottom:1px solid var(--line)">' +
+        '<div class="stack" style="flex:1;min-width:0;gap:3px"><div style="font-weight:600;font-size:17px">' + esc(c.nome) + '</div>' +
+        (c.opcao ? '<div class="muted" style="font-size:14px">' + esc(c.opcao) + '</div>' : '') +
+        '<div style="font-weight:700;font-size:15px">' + brl(c.qtd * c.preco) + '</div></div>' +
+        '<div class="stepper"><button class="sbtn" data-a="qtd" data-i="' + idx + '" data-d="-1" aria-label="Diminuir ' + esc(c.nome) + '">' + I.minus() + '</button>' +
+        '<span class="qtd">' + c.qtd + '</span>' +
+        '<button class="sbtn orange" data-a="qtd" data-i="' + idx + '" data-d="1" aria-label="Aumentar ' + esc(c.nome) + '">' + I.plus(18) + '</button></div></div>';
+    }).join('');
+    return '<div class="wrap">' +
+      '<header class="top stack g8"><button class="linkbtn" data-a="cview" data-v="menu">' + I.back() + ' Cardápio</button>' +
+      '<h1>Seu pedido</h1>' +
+      '<div class="banner ok row g8" style="font-weight:400"><span style="color:var(--teal)">' + I.pin(18) + '</span><span>Vai para: <strong>Guarda-sol ' + n + ' · ' + esc(sess.nome) + '</strong></span></div></header>' +
+      '<main class="stack g16" style="padding:8px 20px 20px">' + banners() +
+      (S.cart.length ? '<div>' + linhas + '</div>' : '<p class="muted" style="padding:16px 0">Seu pedido está vazio.</p>') +
+      '<button class="linkbtn" data-a="cview" data-v="menu">' + I.plus(18) + ' Adicionar mais itens</button>' +
+      '<div><label class="lbl" for="obs">Observação (opcional)</label><textarea class="input soft" id="obs" rows="3" data-bind="obs" placeholder="Ex.: sem gelo, trazer canudos" maxlength="200">' + esc(S.obs) + '</textarea></div>' +
+      '<div class="space-bar" style="height:150px"></div></main>' +
+      '<div class="bottom"><div class="inner stack g10">' +
+      '<div class="line" style="align-items:baseline"><span class="muted" style="font-size:16px">Total do pedido</span><span class="big-total" style="font-size:24px">' + brl(tot) + '</span></div>' +
+      '<button class="btn btn-primary btn-lg btn-block" data-a="enviar"' + (!S.cart.length || S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Enviando…' : 'Enviar pedido') + '</button>' +
+      '<p class="muted" style="font-size:13px;text-align:center">Vai para a sua conta. Você paga no fim, na barraca.</p></div></div></div>';
+  }
+
+  function viewConta(n, sess) {
+    var meus = S.pedidos.filter(function (p) { return p.sid === S.sid; });
+    var ag = agregar(meus);
+    var pessoas = Math.max(1, S.pessoas || sess.pessoas || 1);
+    var cada = ag.total / pessoas;
+    var linhas = ag.linhas.length ? ag.linhas.map(function (l) {
+      return '<div class="line"><span>' + l.qtd + '× ' + esc(l.nome) + (l.opcao ? ' · ' + esc(l.opcao) : '') + '</span><span>' + brl(l.valor) + '</span></div>';
+    }).join('') : '<p class="muted">Nenhum pedido ainda.</p>';
+    return '<div class="wrap">' +
+      '<header class="top stack g10"><div class="row between g10"><h1>Minha conta</h1>' +
+      '<div class="loc">' + I.pin(16) + ' Guarda-sol ' + n + ' · ' + esc(sess.nome) + '</div></div>' +
+      (S.enviado ? '<div class="banner ok row g10"><span style="color:var(--teal)">' + I.check(20) + '</span>Pedido enviado! A barraca já recebeu.</div>' : '') +
+      '</header>' +
+      '<main class="stack g16" style="padding:14px 20px 20px">' + banners() + statusChamado(sess) +
+      '<section class="card stack g12"><p class="sec-t">Consumo</p>' + linhas +
+      '<div class="hr"></div><div class="line" style="align-items:baseline"><span style="font-weight:600;font-size:16px">Total</span><span class="big-total">' + brl(ag.total) + '</span></div></section>' +
+      '<section class="stack g12" style="background:var(--sand);border-radius:16px;padding:16px"><h2 style="font-size:18px">Dividir a conta</h2>' +
+      '<div class="row between g12"><span style="font-size:15px">Quantas pessoas vão pagar?</span>' +
+      '<div class="stepper"><button class="sbtn" style="border-color:var(--ink)" data-a="pessoas" data-d="-1" aria-label="Menos uma pessoa">' + I.minus() + '</button>' +
+      '<span class="qtd" style="font-size:20px">' + pessoas + '</span>' +
+      '<button class="sbtn dark" data-a="pessoas" data-d="1" aria-label="Mais uma pessoa">' + I.plus(18) + '</button></div></div>' +
+      '<div class="line" style="align-items:baseline;border-top:1px solid var(--line);padding-top:12px"><span class="muted">Cada pessoa paga</span><span class="big-total" style="font-size:24px;color:var(--teal)">' + brl(cada) + '</span></div></section>' +
+      '<button class="linkbtn" style="align-self:center" data-a="cview" data-v="menu">' + I.plus(18) + ' Pedir mais</button>' +
+      '<div class="space-bar" style="height:140px"></div></main>' +
+      '<div class="bottom"><div class="inner stack g10"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">' +
+      '<button class="btn btn-outline btn-lg" style="font-size:16px" data-a="chamar" data-t="garcom">' + I.bell(20) + ' Chamar garçom</button>' +
+      '<button class="btn btn-primary btn-lg" style="font-size:16px" data-a="chamar" data-t="conta">' + I.receipt(20) + ' Fechar a conta</button></div>' +
+      '<p class="muted" style="font-size:13px;text-align:center">O garçom confirma o valor. O pagamento é feito na barraca.</p></div></div></div>';
+  }
+
+  // ---------- Telas: barraca ----------
+  function chamadosAbertos() {
+    return Object.keys(S.sessoes).map(function (k) { return S.sessoes[k]; })
+      .filter(function (s) { return s.aberta && s.chamado; })
+      .sort(function (a, b) { return (a.chamadoEm || 0) - (b.chamadoEm || 0); });
+  }
+  function pedidosNovos() {
+    return S.pedidos.filter(function (p) { return p.status === 'novo'; })
+      .sort(function (a, b) { return (a.criadoEm || 0) - (b.criadoEm || 0); });
+  }
+  function statusGs(i) {
+    var s = S.sessoes['gs-' + i];
+    if (!s || !s.aberta) return 'livre';
+    if (s.chamado === 'conta') return 'conta';
+    if (s.chamado === 'garcom' || S.pedidos.some(function (p) { return p.sid === s.sid && p.status === 'novo'; })) return 'novo';
+    return 'ocupado';
+  }
+
+  function headerBarraca(titulo, direita) {
+    return '<header class="top row between g12"><div class="stack" style="gap:2px"><div class="muted" style="font-size:13px">' + esc(S.config.nome) + '</div><h1>' + esc(titulo) + '</h1></div>' + (direita || '') + '</header>';
+  }
+
+  function navBarraca() {
+    var badge = pedidosNovos().length + chamadosAbertos().length;
+    function b(t, label, icon) {
+      return '<button class="' + (S.tab === t ? 'on' : '') + '" data-a="tab" data-t="' + t + '"' + (S.tab === t ? ' aria-current="page"' : '') + '>' + icon +
+        (t === 'pedidos' && badge ? '<span class="dot">' + badge + '</span>' : '') + label + '</button>';
+    }
+    return '<nav class="nav" aria-label="Menu da barraca"><div class="inner">' +
+      b('pedidos', 'Pedidos', I.list()) + b('mapa', 'Mapa', I.map()) + b('cardapio', 'Cardápio', I.menu()) + b('qr', 'QR Codes', I.qr()) +
+      '</div></nav>';
+  }
+
+  function viewBarraca() {
+    if (S.fecharGs != null) return viewFechar();
+    var conteudo = S.tab === 'mapa' ? tabMapa() : S.tab === 'cardapio' ? tabCardapio() : S.tab === 'qr' ? tabQr() : tabPedidos();
+    return '<div class="wrap">' + conteudo + '<div class="space-nav"></div>' + navBarraca() + '</div>';
+  }
+
+  function tabPedidos() {
+    var som = S.somAtivo
+      ? '<span class="btn btn-ghost btn-sm" style="cursor:default;color:var(--teal)">' + I.sound() + ' Som ligado</span>'
+      : '<button class="btn btn-teal btn-sm" data-a="som">' + I.sound() + ' Ativar som</button>';
+    var ch = chamadosAbertos(), nv = pedidosNovos();
+    var h = headerBarraca('Pedidos', som) + '<main class="stack g20" style="padding:16px">' + banners();
+    if (loading()) h += '<p class="muted">Conectando…</p>';
+    if (ch.length) {
+      h += '<section class="stack g10"><h2 class="sec-t">Chamados (' + ch.length + ')</h2>' + ch.map(function (s) {
+        if (s.chamado === 'conta') {
+          return '<div class="chamado conta"><span style="flex:none">' + I.receipt(24) + '</span><div class="stack" style="flex:1;min-width:0;gap:2px">' +
+            '<div style="font-weight:700;font-size:16px">Guarda-sol ' + s.gs + ' · ' + esc(s.nome) + '</div><div style="font-size:14px;color:#CFE0E8">Quer fechar a conta · ' + minAgo(s.chamadoEm) + '</div></div>' +
+            '<button class="btn btn-sm" style="background:#fff;color:var(--ink);flex:none" data-a="abrirFechar" data-gs="' + s.gs + '">Fechar conta</button></div>';
+        }
+        return '<div class="chamado garcom"><span style="flex:none;color:var(--orange)">' + I.bell(24) + '</span><div class="stack" style="flex:1;min-width:0;gap:2px">' +
+          '<div style="font-weight:700;font-size:16px">Guarda-sol ' + s.gs + ' · ' + esc(s.nome) + '</div><div style="font-size:14px">Chamou o garçom · ' + minAgo(s.chamadoEm) + '</div></div>' +
+          '<button class="btn btn-outline btn-sm" style="flex:none" data-a="atender" data-gs="' + s.gs + '">Indo!</button></div>';
+      }).join('') + '</section>';
+    }
+    h += '<section class="stack g12"><h2 class="sec-t">Novos pedidos (' + nv.length + ')</h2>';
+    if (!nv.length && !loading()) {
+      h += '<div class="banner info">Nenhum pedido novo. Abra o QR Code do Guarda-sol 1 no outro celular e faça um pedido. ' + (S.somAtivo ? '' : 'Ative o som para ser avisado.') + '</div>';
+    }
+    h += nv.map(function (p) {
+      return '<article class="card-strong stack g12"><div class="row between g8"><div class="row g8">' +
+        '<span style="background:var(--teal);color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:15px">Guarda-sol ' + esc(p.gs) + '</span>' +
+        '<span style="font-weight:600;font-size:15px">' + esc(p.quem || p.nome) + '</span></div><span class="muted" style="font-size:13px">' + minAgo(p.criadoEm) + '</span></div>' +
+        '<div class="stack g4" style="font-size:17px;font-weight:600">' + (p.itens || []).map(function (it) {
+          return '<div>' + esc(it.qtd) + '× ' + esc(it.nome) + (it.opcao ? ' · ' + esc(it.opcao) : '') + '</div>';
+        }).join('') + '</div>' +
+        (p.obs ? '<div style="background:var(--sand);border-radius:10px;padding:8px 12px;font-size:14px">Obs.: ' + esc(p.obs) + '</div>' : '') +
+        '<button class="btn btn-primary btn-block" style="min-height:52px" data-a="entregue" data-id="' + esc(p.id) + '">' + I.check() + ' Marcar como entregue</button></article>';
+    }).join('');
+    h += '</section>';
+    var entregues = S.pedidos.filter(function (p) { return p.status === 'entregue'; }).slice(0, 5);
+    if (entregues.length) {
+      h += '<section class="stack g8"><h2 class="sec-t">Entregues recentemente</h2>' + entregues.map(function (p) {
+        return '<div class="line muted" style="font-size:14px"><span>Guarda-sol ' + esc(p.gs) + ' · ' + (p.itens || []).map(function (it) { return it.qtd + '× ' + esc(it.nome); }).join(', ') + '</span><span>' + brl(p.total) + '</span></div>';
+      }).join('') + '</section>';
+    }
+    return h + '</main>';
+  }
+
+  function tabMapa() {
+    var N = S.config.guardasois, grid = '';
+    for (var i = 1; i <= N; i++) {
+      var st = statusGs(i);
+      grid += '<button class="gs ' + st + (S.mapaSel === i ? ' sel' : '') + '" data-a="mapaSel" data-gs="' + i + '" aria-label="Guarda-sol ' + i + '">' + i + '</button>';
+    }
+    var det = '';
+    if (S.mapaSel) {
+      var i2 = S.mapaSel, s = S.sessoes['gs-' + i2], st2 = statusGs(i2);
+      var labels = { livre: 'Livre', ocupado: 'Conta aberta', novo: 'Pedido novo ou chamado', conta: 'Quer fechar a conta' };
+      det = '<section class="card-strong stack g10" aria-live="polite"><div class="row between g8" style="align-items:baseline"><div class="disp" style="font-weight:700;font-size:19px">Guarda-sol ' + i2 +
+        (s && s.aberta ? ' · ' + esc(s.nome) : '') + '</div><div class="muted" style="font-size:13px;font-weight:600">' + labels[st2] + '</div></div>';
+      if (s && s.aberta) {
+        var ag = agregar(S.pedidos.filter(function (p) { return p.sid === s.sid; }));
+        det += '<div class="line"><span class="muted">Conta até agora</span><strong>' + brl(ag.total) + '</strong></div>' +
+          '<button class="btn btn-dark btn-block" data-a="abrirFechar" data-gs="' + i2 + '">Ver / fechar conta</button>';
+      } else {
+        det += '<p class="muted" style="font-size:14px">Ninguém neste guarda-sol agora.</p>';
+      }
+      det += '</section>';
+    }
+    return headerBarraca('Mapa') + '<main class="stack g16" style="padding:16px">' + banners() +
+      '<div class="row g16" style="flex-wrap:wrap;font-size:12px">' +
+      '<span class="row g6"><span class="sw" style="border:2px solid #8A7A60"></span>Livre</span>' +
+      '<span class="row g6"><span class="sw" style="background:var(--tealmid)"></span>Ocupado</span>' +
+      '<span class="row g6"><span class="sw" style="background:var(--orange)"></span>Pedido / chamado</span>' +
+      '<span class="row g6"><span class="sw" style="background:var(--ink)"></span>Fechar conta</span></div>' +
+      '<div class="stack g12" style="border:1px solid var(--line);border-radius:18px;padding:12px;background:#FBF8F2">' +
+      '<div style="height:30px;border-radius:10px;background:var(--tealmid);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;letter-spacing:.08em">MAR</div>' +
+      '<div class="gsgrid">' + grid + '</div>' +
+      '<div class="disp" style="height:46px;border-radius:12px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600">Barraca</div></div>' +
+      det +
+      '<div class="row between g12 card"><span style="font-size:15px">Guarda-sóis no mapa</span><div class="stepper">' +
+      '<button class="sbtn" data-a="numGs" data-d="-1" aria-label="Menos um guarda-sol">' + I.minus() + '</button><span class="qtd">' + N + '</span>' +
+      '<button class="sbtn dark" data-a="numGs" data-d="1" aria-label="Mais um guarda-sol">' + I.plus(18) + '</button></div></div>' +
+      '</main>';
+  }
+
+  function tabCardapio() {
+    var h = headerBarraca('Cardápio', '<button class="btn btn-primary btn-sm" data-a="novoToggle">' + (S.showNovo ? 'Fechar' : I.plus(18) + ' Novo item') + '</button>') +
+      '<main class="stack g12" style="padding:14px 20px">' + banners();
+    if (S.showNovo) {
+      h += '<form data-form="salvarItem" class="card stack g12" style="border-width:2px;border-color:var(--ink)"><h2>Novo item</h2>' +
+        '<div><label class="lbl" for="ni-nome">Nome</label><input class="input soft" id="ni-nome" data-bind="ni.nome" value="' + esc(S.ni.nome) + '" placeholder="Ex.: Caipirinha" maxlength="60"></div>' +
+        '<div class="row g10"><div style="flex:1"><label class="lbl" for="ni-preco">Preço</label><input class="input soft" id="ni-preco" inputmode="decimal" data-bind="ni.preco" value="' + esc(S.ni.preco) + '" placeholder="22,00"></div>' +
+        '<div style="flex:1"><label class="lbl" for="ni-cat">Categoria</label><input class="input soft" id="ni-cat" data-bind="ni.cat" value="' + esc(S.ni.cat) + '" placeholder="Drinks" list="cats" maxlength="30"></div></div>' +
+        '<datalist id="cats">' + categorias().slice(1).filter(function (c) { return c !== 'Destaques'; }).map(function (c) { return '<option value="' + esc(c) + '"></option>'; }).join('') + '</datalist>' +
+        '<div><label class="lbl" for="ni-desc">Descrição (opcional)</label><input class="input soft" id="ni-desc" data-bind="ni.desc" value="' + esc(S.ni.desc) + '" placeholder="Ex.: bem gelada" maxlength="80"></div>' +
+        '<div><label class="lbl" for="ni-op">Opções para escolher (opcional)</label><input class="input soft" id="ni-op" data-bind="ni.opcoes" value="' + esc(S.ni.opcoes) + '" placeholder="Limão, Maracujá, Morango" maxlength="120"></div>' +
+        '<label class="row g10" style="min-height:44px;font-size:15px"><input type="checkbox" data-bind="ni.destaque" style="width:24px;height:24px;accent-color:var(--teal)"' + (S.ni.destaque ? ' checked' : '') + '> Mostrar em Destaques</label>' +
+        '<button class="btn btn-primary btn-lg btn-block" type="submit"' + (S.busy ? ' disabled' : '') + '>Salvar item</button></form>';
+    } else {
+      h += '<div class="banner info">Acabou alguma coisa? Toque em <strong>Tem</strong> e o item fica apagado no celular do cliente na hora.</div>';
+    }
+    if (S.okCard && !S.cardapio.length) h += '<div class="card stack g10"><p>O cardápio está vazio. Cadastre seus itens em <strong>Novo item</strong> ou comece com um cardápio de exemplo.</p><button class="btn btn-teal btn-block" data-a="seed"' + (S.busy ? ' disabled' : '') + '>Carregar cardápio de exemplo</button></div>';
+    h += S.cardapio.map(function (i) {
+      var del = S.confirmDel === i.id;
+      return '<div class="row g12" style="padding:10px 0;border-bottom:1px solid #F0E8DA">' +
+        '<div class="foto" style="width:52px;height:52px" aria-hidden="true">' + I.img(20) + '</div>' +
+        '<div class="stack" style="flex:1;min-width:0;gap:2px"><div style="font-weight:600;font-size:15px">' + esc(i.nome) + '</div>' +
+        '<div class="muted" style="font-size:12px">' + esc(i.cat || 'Outros') + (i.destaque ? ' · destaque' : '') + (i.opcoes && i.opcoes.length ? ' · ' + i.opcoes.length + ' opções' : '') + '</div>' +
+        '<div class="row g10"><strong style="font-size:14px">' + brl(i.preco) + '</strong>' +
+        '<button class="linkbtn" style="font-size:13px;min-height:32px;color:' + (del ? 'var(--orange)' : 'var(--muted)') + '" data-a="del" data-id="' + esc(i.id) + '">' + (del ? 'Confirmar remoção' : 'Remover') + '</button></div></div>' +
+        '<button class="toggle' + (i.acabou ? ' off' : '') + '" data-a="acabou" data-id="' + esc(i.id) + '" aria-pressed="' + (!i.acabou) + '">' + (i.acabou ? 'Acabou :(' : 'Tem') + '</button></div>';
+    }).join('');
+    return h + '</main>';
+  }
+
+  function tabQr() {
+    var N = S.config.guardasois, cards = '';
+    for (var i = 1; i <= N; i++) {
+      var url = ARTIFACT_URL + '#gs-' + i;
+      cards += '<div class="card stack g8" style="padding:12px;align-items:center"><div class="qr" style="padding:4px" data-qr="' + esc(url) + '" data-size="130"></div>' +
+        '<div class="disp" style="font-weight:700;font-size:16px">Guarda-sol ' + i + '</div>' +
+        '<a href="#gs-' + i + '" style="font-size:13px;font-weight:600">Abrir aqui</a></div>';
+    }
+    var nomeVal = S.cfgNome == null ? S.config.nome : S.cfgNome;
+    return headerBarraca('QR Codes') + '<main class="stack g16" style="padding:16px">' + banners() +
+      '<form data-form="salvarNome" class="card stack g10"><label class="lbl" for="cfg-nome" style="margin:0">Nome da barraca</label>' +
+      '<div class="row g8"><input class="input soft" id="cfg-nome" data-bind="cfgNome" value="' + esc(nomeVal) + '" maxlength="40"><button class="btn btn-dark" type="submit">Salvar</button></div></form>' +
+      '<p class="muted" style="font-size:14px;line-height:1.45">Cada QR abre o cardápio já identificando o guarda-sol. Aponte a câmera do outro celular para um deles.</p>' +
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">' + cards + '</div>' +
+      '<a href="#" class="btn btn-ghost btn-block">Voltar para a tela inicial do teste</a></main>';
+  }
+
+  function viewFechar() {
+    var n = S.fecharGs, s = S.sessoes['gs-' + n];
+    var topo = '<header class="top stack g6"><button class="linkbtn" data-a="voltarFechar">' + I.back() + ' Voltar</button>';
+    if (!s || !s.aberta) {
+      return '<div class="wrap">' + topo + '<h1>Fechar conta</h1></header><main class="pad stack g16"><div class="banner info">A conta do Guarda-sol ' + n + ' já está fechada.</div></main></div>';
+    }
+    var ps = S.pedidos.filter(function (p) { return p.sid === s.sid; });
+    var ag = agregar(ps), pessoas = Math.max(1, s.pessoas || 1);
+    var pend = ps.filter(function (p) { return p.status === 'novo'; }).length;
+    var linhas = ag.linhas.length ? ag.linhas.map(function (l) {
+      return '<div class="line"><span>' + l.qtd + '× ' + esc(l.nome) + (l.opcao ? ' · ' + esc(l.opcao) : '') + '</span><span>' + brl(l.valor) + '</span></div>';
+    }).join('') : '<p class="muted">Nenhum pedido nesta conta.</p>';
+    var formas = ['Pix', 'Cartão', 'Dinheiro'];
+    return '<div class="wrap">' + topo + '<h1>Fechar conta</h1><div style="font-size:15px;font-weight:600;color:var(--teal)">Guarda-sol ' + n + ' · ' + esc(s.nome) + '</div></header>' +
+      '<main class="stack g16" style="padding:18px 20px">' + banners() +
+      (pend ? '<div class="banner warn">Ainda há ' + pend + ' pedido' + (pend > 1 ? 's' : '') + ' não entregue' + (pend > 1 ? 's' : '') + ' nesta conta.</div>' : '') +
+      '<section class="stack g12">' + linhas + '<div class="hr"></div>' +
+      '<div class="line" style="align-items:baseline"><span style="font-weight:600;font-size:17px">Total</span><span class="big-total" style="font-size:32px">' + brl(ag.total) + '</span></div></section>' +
+      '<section class="row between g12" style="background:var(--sand);border-radius:14px;padding:14px 16px"><div class="stack g4"><span class="muted" style="font-size:14px">Dividido em</span><strong style="font-size:17px">' + pessoas + ' pessoa' + (pessoas > 1 ? 's' : '') + '</strong></div>' +
+      '<div class="stack g4" style="text-align:right"><span class="muted" style="font-size:14px">Cada um</span><span class="big-total" style="font-size:22px;color:var(--teal)">' + brl(ag.total / pessoas) + '</span></div></section>' +
+      '<fieldset style="margin:0;padding:0;border:none"><legend class="lbl" style="padding:0">Como pagou (na barraca)</legend>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">' + formas.map(function (f) {
+        return '<button class="opt solid' + (S.pagamento === f ? ' on' : '') + '" style="min-height:52px;font-size:15px" aria-pressed="' + (S.pagamento === f) + '" data-a="pagamento" data-f="' + f + '">' + f + '</button>';
+      }).join('') + '</div></fieldset>' +
+      '<div style="height:110px"></div></main>' +
+      '<div class="bottom"><div class="inner"><button class="btn btn-primary btn-lg btn-block" data-a="pago"' + (S.busy ? ' disabled' : '') + '>' + I.check(22) + ' Conta paga · liberar guarda-sol</button></div></div></div>';
+  }
+
+  // ---------- Render ----------
+  function view() {
+    if (S.route.v === 'barraca') return viewBarraca();
+    if (S.route.v === 'cliente') return viewCliente();
+    return viewInicio();
+  }
+
+  function render() {
+    var a = document.activeElement, fid = null, s0 = null, s1 = null;
+    if (a && a.id && app.contains(a)) { fid = a.id; try { s0 = a.selectionStart; s1 = a.selectionEnd; } catch (e) {} }
+    var sy = window.scrollY;
+    app.innerHTML = view();
+    if (fid) {
+      var el = document.getElementById(fid);
+      if (el) { el.focus({ preventScroll: true }); try { if (s0 != null) el.setSelectionRange(s0, s1); } catch (e) {} }
+    }
+    if (S.top) { window.scrollTo(0, 0); S.top = false; } else { window.scrollTo(0, sy); }
+    drawQrs();
+  }
+
+  function drawQrs() {
+    var els = app.querySelectorAll('[data-qr]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], txt = el.getAttribute('data-qr'), size = parseInt(el.getAttribute('data-size'), 10) || 170;
+      if (ARTIFACT_URL.indexOf('__') === 0) { el.innerHTML = '<span class="muted" style="font-size:13px">Link ainda não configurado.</span>'; continue; }
+      if (typeof QRCode === 'undefined') { el.innerHTML = '<span class="muted" style="font-size:13px">Não foi possível desenhar o QR Code. Use o link.</span>'; continue; }
+      try { new QRCode(el, { text: txt, width: size, height: size, colorDark: '#0B2A3C', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
+      el.setAttribute('role', 'img'); el.setAttribute('aria-label', 'QR Code: ' + txt);
+    }
+  }
+
+  function isTyping() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
+
+  // ---------- Ações ----------
+  function setPath(path, val) {
+    var parts = path.split('.'), o = S;
+    for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+    o[parts[parts.length - 1]] = val;
+  }
+
+  function act(a, d) {
+    var n, s, ref;
+    switch (a) {
+      case 'entrar': {
+        var nome = (S.nomeInput || '').trim();
+        if (!nome) { toast('Digite seu nome.'); return; }
+        n = S.route.gs; s = S.sessoes['gs-' + n];
+        S.meuNome = nome; LS.set('ondway-nome', nome);
+        if (s && s.aberta) { S.sid = s.sid; LS.set(sidKey(n), s.sid); S.cview = 'menu'; S.top = true; render(); return; }
+        var sid = novoId(); S.busy = true; render();
+        w(function () { return S.db.doc('sessoes/gs-' + n).set({ gs: n, aberta: true, nome: nome, sid: sid, desde: Date.now(), chamado: null, chamadoEm: null, pessoas: 1 }); })
+          .then(function (ok) { S.busy = false; if (ok) { S.sid = sid; LS.set(sidKey(n), sid); S.cview = 'menu'; S.top = true; } render(); });
+        return;
+      }
+      case 'novaConta': n = S.route.gs; LS.del(sidKey(n)); S.sid = null; S.cart = []; S.enviado = false; S.pessoas = null; S.top = true; render(); return;
+      case 'cview': S.cview = d.v; if (d.v !== 'conta') S.enviado = false; S.top = true; render(); return;
+      case 'cat': S.cat = d.c; render(); return;
+      case 'opcao': S.opcaoSel[d.id] = d.o; render(); return;
+      case 'add': {
+        var it = S.cardapio.filter(function (x) { return x.id === d.id; })[0];
+        if (!it || it.acabou) return;
+        var ops = Array.isArray(it.opcoes) ? it.opcoes : [];
+        var op = ops.length ? (S.opcaoSel[it.id] || ops[0]) : '';
+        var key = it.id + '|' + op, ex = S.cart.filter(function (c) { return c.key === key; })[0];
+        if (ex) ex.qtd += 1; else S.cart.push({ key: key, id: it.id, nome: it.nome, opcao: op, preco: Number(it.preco) || 0, qtd: 1 });
+        toast(it.nome + (op ? ' · ' + op : '') + ' adicionado');
+        render(); return;
+      }
+      case 'qtd': {
+        var c = S.cart[+d.i]; if (!c) return;
+        c.qtd += +d.d; if (c.qtd <= 0) S.cart.splice(+d.i, 1);
+        render(); return;
+      }
+      case 'enviar': {
+        if (!S.cart.length || S.busy) return;
+        n = S.route.gs; s = S.sessoes['gs-' + n];
+        if (!s || !s.aberta || s.sid !== S.sid) { toast('Esta conta foi fechada.'); render(); return; }
+        var itens = S.cart.map(function (c) { return { nome: c.nome, opcao: c.opcao || '', qtd: c.qtd, preco: c.preco }; });
+        var total = itens.reduce(function (t, x) { return t + x.qtd * x.preco; }, 0);
+        S.busy = true; render();
+        w(function () { return S.db.collection('pedidos').add({ gs: n, sid: S.sid, nome: s.nome, quem: S.meuNome || s.nome, itens: itens, obs: (S.obs || '').trim(), total: total, status: 'novo', criadoEm: Date.now() }); })
+          .then(function (ok) { S.busy = false; if (ok) { S.cart = []; S.obs = ''; S.enviado = true; S.cview = 'conta'; S.top = true; } render(); });
+        return;
+      }
+      case 'chamar': {
+        n = S.route.gs; s = S.sessoes['gs-' + n];
+        if (!s || !s.aberta) return;
+        if (s.chamado === d.t) { toast(d.t === 'conta' ? 'O garçom já foi avisado para fechar sua conta.' : 'O garçom já foi chamado.'); return; }
+        w(function () { return S.db.doc('sessoes/gs-' + n).update({ chamado: d.t, chamadoEm: Date.now() }); })
+          .then(function (ok) { if (ok) toast(d.t === 'conta' ? 'Pedido de fechamento enviado.' : 'Garçom chamado!'); });
+        return;
+      }
+      case 'pessoas': {
+        n = S.route.gs; s = S.sessoes['gs-' + n]; if (!s) return;
+        var p = Math.min(30, Math.max(1, (S.pessoas || s.pessoas || 1) + (+d.d)));
+        if (p === (S.pessoas || s.pessoas || 1)) return;
+        S.pessoas = p; render();
+        w(function () { return S.db.doc('sessoes/gs-' + n).update({ pessoas: p }); });
+        return;
+      }
+      // barraca
+      case 'tab': S.tab = d.t; S.mapaSel = null; S.confirmDel = null; S.top = true; render(); return;
+      case 'som': ativarSom(); return;
+      case 'atender':
+        w(function () { return S.db.doc('sessoes/gs-' + d.gs).update({ chamado: null, chamadoEm: null }); });
+        return;
+      case 'entregue':
+        w(function () { return S.db.doc('pedidos/' + d.id).update({ status: 'entregue', entregueEm: Date.now() }); });
+        return;
+      case 'abrirFechar': S.fecharGs = +d.gs; S.pagamento = 'Pix'; S.top = true; render(); return;
+      case 'voltarFechar': S.fecharGs = null; S.top = true; render(); return;
+      case 'pagamento': S.pagamento = d.f; render(); return;
+      case 'pago': {
+        n = S.fecharGs; s = S.sessoes['gs-' + n]; if (!s || S.busy) return;
+        var tot = agregar(S.pedidos.filter(function (x) { return x.sid === s.sid; })).total;
+        S.busy = true; render();
+        w(function () { return S.db.doc('sessoes/gs-' + n).update({ aberta: false, chamado: null, chamadoEm: null, pagoEm: Date.now(), pagamento: S.pagamento, totalPago: tot }); })
+          .then(function (ok) { S.busy = false; if (ok) { S.fecharGs = null; S.mapaSel = null; toast('Conta fechada. Guarda-sol ' + n + ' liberado.'); } render(); });
+        return;
+      }
+      case 'mapaSel': S.mapaSel = +d.gs; render(); return;
+      case 'numGs': {
+        var x = Math.min(60, Math.max(1, S.config.guardasois + (+d.d)));
+        if (x === S.config.guardasois) return;
+        var nomeAtual = S.config.nome;
+        S.config.guardasois = x; render();
+        w(function () { return S.db.doc('config/barraca').set({ nome: nomeAtual, guardasois: x }); });
+        return;
+      }
+      case 'salvarNome': {
+        var nm = (S.cfgNome == null ? S.config.nome : S.cfgNome).trim();
+        if (!nm) { toast('Digite o nome da barraca.'); return; }
+        var qtdGs = S.config.guardasois;
+        w(function () { return S.db.doc('config/barraca').set({ nome: nm, guardasois: qtdGs }); })
+          .then(function (ok) { if (ok) { S.cfgNome = null; toast('Nome salvo.'); render(); } });
+        return;
+      }
+      case 'novoToggle': S.showNovo = !S.showNovo; render(); return;
+      case 'salvarItem': {
+        var ni = S.ni, nomeI = (ni.nome || '').trim(), preco = parsePreco(ni.preco);
+        if (!nomeI) { toast('Digite o nome do item.'); return; }
+        if (!(preco >= 0)) { toast('Digite um preço válido, ex.: 22,00'); return; }
+        var opcoes = (ni.opcoes || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        var doc = { nome: nomeI, preco: preco, cat: (ni.cat || '').trim() || 'Outros', desc: (ni.desc || '').trim(), opcoes: opcoes, destaque: !!ni.destaque, acabou: false, ordem: Date.now() };
+        S.busy = true; render();
+        w(function () { return S.db.collection('cardapio').add(doc); })
+          .then(function (ok) { S.busy = false; if (ok) { S.ni = { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false }; S.showNovo = false; toast('Item salvo.'); } render(); });
+        return;
+      }
+      case 'acabou': {
+        var item = S.cardapio.filter(function (x) { return x.id === d.id; })[0]; if (!item) return;
+        w(function () { return S.db.doc('cardapio/' + d.id).update({ acabou: !item.acabou }); });
+        return;
+      }
+      case 'seed': {
+        if (S.busy || S.cardapio.length) return;
+        var ex = [
+          ['balde', 'Balde com 5 cervejas', 45, 'Combos', 'Lata 350 ml, bem gelada', [], true],
+          ['cerveja', 'Cerveja lata 350 ml', 10, 'Bebidas', 'Bem gelada', [], false],
+          ['coco', 'Água de coco', 8, 'Bebidas', 'Direto do coco', [], false],
+          ['refri', 'Refrigerante lata', 7, 'Bebidas', '350 ml', ['Cola', 'Guaraná'], false],
+          ['agua', 'Água mineral 500 ml', 5, 'Bebidas', '', ['Sem gás', 'Com gás'], false],
+          ['caipi', 'Caipirinha', 22, 'Drinks', 'Escolha a fruta', ['Limão', 'Maracujá', 'Morango'], true],
+          ['batata', 'Porção de batata frita', 35, 'Porções', 'Serve 2 a 3 pessoas', [], false],
+          ['isca', 'Isca de peixe', 55, 'Porções', 'Com molho tártaro', [], false]
+        ];
+        S.busy = true; render();
+        w(function () {
+          return ex.reduce(function (pr, x, k) {
+            return pr.then(function () { return S.db.doc('cardapio/' + x[0]).set({ nome: x[1], preco: x[2], cat: x[3], desc: x[4], opcoes: x[5], destaque: x[6], acabou: false, ordem: k + 1 }); });
+          }, Promise.resolve());
+        }).then(function (ok) { S.busy = false; if (ok) toast('Cardápio de exemplo carregado.'); render(); });
+        return;
+      }
+      case 'del': {
+        if (S.confirmDel !== d.id) { S.confirmDel = d.id; render(); return; }
+        S.confirmDel = null;
+        w(function () { return S.db.doc('cardapio/' + d.id).delete(); }).then(function (ok) { if (ok) toast('Item removido.'); });
+        return;
+      }
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-a]');
+    if (!el || !app.contains(el)) return;
+    e.preventDefault();
+    act(el.getAttribute('data-a'), el.dataset);
+  });
+  document.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target.getAttribute('data-form');
+    if (f) act(f, {});
+  });
+  document.addEventListener('input', function (e) {
+    var b = e.target.getAttribute && e.target.getAttribute('data-bind');
+    if (!b) return;
+    setPath(b, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
+  });
+  document.addEventListener('change', function (e) {
+    var b = e.target.getAttribute && e.target.getAttribute('data-bind');
+    if (b && e.target.type === 'checkbox') setPath(b, e.target.checked);
+  });
+  window.addEventListener('hashchange', function () { applyRoute(); render(); });
+  setInterval(function () { if (S.route.v === 'barraca' && !isTyping()) render(); }, 30000);
+
+  // ---------- Conexão ----------
+  function checkLoaded() { if (!loading()) { clearTimeout(slowTimer); S.slow = false; } }
+  var slowTimer = setTimeout(function () { if (loading()) { S.slow = true; render(); } }, 10000);
+  function onErr(e) { S.erro = (e && e.code) || 'erro'; clearTimeout(slowTimer); render(); }
+
+  function start(db) {
+    S.db = db;
+    db.collection('cardapio').onSnapshot(function (snap) {
+      S.cardapio = snap.docs.map(function (d) { var x = d.data(); return Object.assign({ id: d.id }, x); })
+        .sort(function (a, b) { return (a.ordem || 0) - (b.ordem || 0); });
+      S.okCard = true; checkLoaded(); render();
+    }, onErr);
+    db.collection('sessoes').onSnapshot(function (snap) {
+      var m = {}, avisar = false;
+      snap.docs.forEach(function (d) {
+        var x = d.data(); m[d.id] = x;
+        var antes = S.sessoes[d.id];
+        if (S.okSess && x.aberta && x.chamado && (!antes || antes.chamado !== x.chamado)) avisar = true;
+      });
+      S.sessoes = m; S.okSess = true;
+      if (avisar && S.route.v === 'barraca') beep();
+      checkLoaded(); render();
+    }, onErr);
+    db.collection('pedidos').orderBy('criadoEm', 'desc').limit(300).onSnapshot(function (snap) {
+      if (S.okPed && S.route.v === 'barraca') {
+        var novos = snap.docChanges().some(function (c) { return c.type === 'added' && c.doc.data().status === 'novo'; });
+        if (novos) beep();
+      }
+      S.pedidos = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      S.okPed = true; checkLoaded(); render();
+    }, onErr);
+    db.doc('config/barraca').onSnapshot(function (d) {
+      if (d.exists) {
+        var x = d.data();
+        S.config = { nome: x.nome || 'Barraca Teste', guardasois: Math.max(1, Math.min(60, x.guardasois || 12)) };
+      }
+      S.okCfg = true; checkLoaded(); render();
+    }, onErr);
+  }
+
+  applyRoute();
+  render();
+
+  function semConexao() { S.semDb = true; clearTimeout(slowTimer); render(); }
+  try {
+    if (typeof firebase === 'undefined') throw new Error('sdk');
+    firebase.initializeApp(FIREBASE_CONFIG);
+    var fdb = firebase.firestore();
+    var P = 'barracas/' + BARRACA + '/';
+    start({
+      doc: function (p) { return fdb.doc(P + p); },
+      collection: function (p) { return fdb.collection(P + p); }
+    });
+  } catch (e) { semConexao(); }
+})();
+</script>
+</body>
+</html>
