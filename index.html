@@ -59,7 +59,7 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:12px 16px 20px;background:#fff;border-top:1px solid var(--line)}
 .bottom .inner{max-width:448px;margin:0 auto}
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:5;background:#fff;border-top:1px solid var(--line);padding:6px 8px 14px}
-.nav .inner{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.nav .inner{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
 .nav button{background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:54px;justify-content:center;font:500 12px Inter,sans-serif;color:var(--muted);cursor:pointer;position:relative}
 .nav button.on{color:var(--orange);font-weight:700}
 .nav .dot{position:absolute;top:2px;left:calc(50% + 6px);min-width:20px;height:20px;border-radius:999px;background:var(--orange);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px}
@@ -142,6 +142,7 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
     map: function (s) { return svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path>', s || 22); },
     menu: function (s) { return svg('<path d="M3 2v7c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2V2M6 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>', s || 22); },
     qr: function (s) { return svg('<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"></path>', s || 22); },
+    chart: function (s) { return svg('<path d="M3 3v18h18"></path><path d="M7 16v-5M12 16V7M17 16v-3"></path>', s || 22); },
     sound: function (s) { return svg('<path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"></path>', s || 18); }
   };
 
@@ -184,7 +185,8 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
     // barraca
     tab: 'pedidos', mapaSel: null, fecharGs: null, pagamento: 'Pix', somAtivo: false,
     showNovo: false, ni: { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false },
-    confirmDel: null, cfgNome: null
+    confirmDel: null, cfgNome: null,
+    fechamentos: [], okFech: false, relPeriodo: 'hoje'
   };
 
   function loading() { return !S.semDb && !S.erro && !(S.okCard && S.okSess && S.okPed && S.okCfg); }
@@ -476,13 +478,13 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
         (t === 'pedidos' && badge ? '<span class="dot">' + badge + '</span>' : '') + label + '</button>';
     }
     return '<nav class="nav" aria-label="Menu da barraca"><div class="inner">' +
-      b('pedidos', 'Pedidos', I.list()) + b('mapa', 'Mapa', I.map()) + b('cardapio', 'Cardápio', I.menu()) + b('qr', 'QR Codes', I.qr()) +
+      b('pedidos', 'Pedidos', I.list()) + b('mapa', 'Mapa', I.map()) + b('cardapio', 'Cardápio', I.menu()) + b('relatorio', 'Relatório', I.chart()) + b('qr', 'QR Codes', I.qr()) +
       '</div></nav>';
   }
 
   function viewBarraca() {
     if (S.fecharGs != null) return viewFechar();
-    var conteudo = S.tab === 'mapa' ? tabMapa() : S.tab === 'cardapio' ? tabCardapio() : S.tab === 'qr' ? tabQr() : tabPedidos();
+    var conteudo = S.tab === 'mapa' ? tabMapa() : S.tab === 'cardapio' ? tabCardapio() : S.tab === 'qr' ? tabQr() : S.tab === 'relatorio' ? tabRelatorio() : tabPedidos();
     return '<div class="wrap">' + conteudo + '<div class="space-nav"></div>' + navBarraca() + '</div>';
   }
 
@@ -594,6 +596,64 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
         '<button class="linkbtn" style="font-size:13px;min-height:32px;color:' + (del ? 'var(--orange)' : 'var(--muted)') + '" data-a="del" data-id="' + esc(i.id) + '">' + (del ? 'Confirmar remoção' : 'Remover') + '</button></div></div>' +
         '<button class="toggle' + (i.acabou ? ' off' : '') + '" data-a="acabou" data-id="' + esc(i.id) + '" aria-pressed="' + (!i.acabou) + '">' + (i.acabou ? 'Acabou :(' : 'Tem') + '</button></div>';
     }).join('');
+    return h + '</main>';
+  }
+
+  function inicioPeriodo(p) {
+    var d = new Date(); d.setHours(0, 0, 0, 0);
+    if (p === '7d') d.setDate(d.getDate() - 6);
+    return d.getTime();
+  }
+
+  function tabRelatorio() {
+    var ini = inicioPeriodo(S.relPeriodo);
+    var ps = S.pedidos.filter(function (p) { return (p.criadoEm || 0) >= ini; });
+    var fs = S.fechamentos.filter(function (f) { return (f.em || 0) >= ini; });
+    var vendas = ps.reduce(function (t, p) { return t + (Number(p.total) || 0); }, 0);
+    var recebido = fs.reduce(function (t, f) { return t + (Number(f.total) || 0); }, 0);
+    var media = fs.length ? recebido / fs.length : null;
+    var qtd = {};
+    ps.forEach(function (p) { (p.itens || []).forEach(function (it) { qtd[it.nome] = (qtd[it.nome] || 0) + (Number(it.qtd) || 0); }); });
+    var top = Object.keys(qtd).map(function (k) { return [k, qtd[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5);
+    var max = top.length ? top[0][1] : 1;
+    var horas = {}, pico = null;
+    ps.forEach(function (p) { var h = new Date(p.criadoEm).getHours(); horas[h] = (horas[h] || 0) + 1; });
+    Object.keys(horas).forEach(function (h) { if (pico === null || horas[h] > horas[pico]) pico = h; });
+    var pg = {};
+    fs.forEach(function (f) { var k = f.pagamento || 'Outro'; pg[k] = (pg[k] || 0) + (Number(f.total) || 0); });
+    var hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
+    function tile(rot, val, sub) {
+      return '<div class="card stack g4" style="padding:14px"><span class="muted" style="font-size:13px">' + rot + '</span>' +
+        '<span class="big-total" style="font-size:24px">' + val + '</span>' + (sub ? '<span class="muted" style="font-size:12px">' + sub + '</span>' : '') + '</div>';
+    }
+    var h = headerBarraca('Relatório', '<span class="muted" style="font-size:13px">' + esc(hoje) + '</span>') +
+      '<main class="stack g20" style="padding:16px">' + banners() +
+      '<div class="row g4" role="group" aria-label="Período" style="background:var(--sand);border-radius:14px;padding:4px">' +
+      [['hoje', 'Hoje'], ['7d', 'Últimos 7 dias']].map(function (o) {
+        var on = S.relPeriodo === o[0];
+        return '<button class="btn" style="flex:1;min-height:44px;border:none;' + (on ? 'background:var(--ink);color:#fff' : 'background:transparent;font-weight:500') + '" aria-pressed="' + on + '" data-a="relPeriodo" data-p="' + o[0] + '">' + o[1] + '</button>';
+      }).join('') + '</div>';
+    if (!S.okPed || !S.okFech) return h + '<p class="muted">Carregando…</p></main>';
+    if (!ps.length && !fs.length) return h + '<div class="banner info">Ainda não há pedidos neste período. Os números aparecem aqui assim que os clientes começarem a pedir.</div></main>';
+    h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">' +
+      tile('Vendas', brl(vendas), 'soma dos pedidos feitos') +
+      tile('Pedidos', ps.length, '') +
+      tile('Contas fechadas', fs.length, fs.length ? brl(recebido) + ' recebidos' : '') +
+      tile('Média por conta', media === null ? '—' : brl(media), '') + '</div>';
+    if (top.length) {
+      h += '<section class="stack g12"><h2>Mais vendidos</h2>' + top.map(function (t) {
+        return '<div class="stack g6"><div class="line" style="font-size:14px"><span>' + esc(t[0]) + '</span><strong>' + t[1] + '</strong></div>' +
+          '<div aria-hidden="true" style="height:10px;border-radius:999px;background:#F0E8DA"><div style="width:' + Math.max(4, Math.round(t[1] / max * 100)) + '%;height:10px;border-radius:999px;background:var(--teal)"></div></div></div>';
+      }).join('') + '</section>';
+    }
+    if (Object.keys(pg).length) {
+      h += '<section class="card stack g10"><h2 style="font-size:17px">Como os clientes pagaram</h2>' + Object.keys(pg).map(function (k) {
+        return '<div class="line"><span>' + esc(k) + '</span><strong>' + brl(pg[k]) + '</strong></div>';
+      }).join('') + '</section>';
+    }
+    if (pico !== null) {
+      h += '<div class="row between g12" style="background:var(--sand);border-radius:14px;padding:14px 16px"><span class="muted">Horário de pico</span><strong style="font-size:16px">' + pico + 'h – ' + (Number(pico) + 1) + 'h</strong></div>';
+    }
     return h + '</main>';
   }
 
@@ -758,11 +818,13 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
         n = S.fecharGs; s = S.sessoes['gs-' + n]; if (!s || S.busy) return;
         var tot = agregar(S.pedidos.filter(function (x) { return x.sid === s.sid; })).total;
         S.busy = true; render();
-        w(function () { return S.db.doc('sessoes/gs-' + n).update({ aberta: false, chamado: null, chamadoEm: null, pagoEm: Date.now(), pagamento: S.pagamento, totalPago: tot }); })
+        var fech = { gs: n, nome: s.nome, sid: s.sid, total: tot, pagamento: S.pagamento, pessoas: s.pessoas || 1, em: Date.now() };
+        w(function () { return S.db.doc('sessoes/gs-' + n).update({ aberta: false, chamado: null, chamadoEm: null, pagoEm: fech.em, pagamento: S.pagamento, totalPago: tot }).then(function () { return S.db.collection('fechamentos').add(fech); }); })
           .then(function (ok) { S.busy = false; if (ok) { S.fecharGs = null; S.mapaSel = null; toast('Conta fechada. Guarda-sol ' + n + ' liberado.'); } render(); });
         return;
       }
       case 'mapaSel': S.mapaSel = +d.gs; render(); return;
+      case 'relPeriodo': S.relPeriodo = d.p; render(); return;
       case 'numGs': {
         var x = Math.min(60, Math.max(1, S.config.guardasois + (+d.d)));
         if (x === S.config.guardasois) return;
@@ -871,7 +933,11 @@ header.top{padding:16px 20px 12px;border-bottom:1px solid var(--line);background
       if (avisar && S.route.v === 'barraca') beep();
       checkLoaded(); render();
     }, onErr);
-    db.collection('pedidos').orderBy('criadoEm', 'desc').limit(300).onSnapshot(function (snap) {
+    db.collection('fechamentos').where('em', '>=', inicioPeriodo('7d')).orderBy('em', 'desc').limit(1000).onSnapshot(function (snap) {
+      S.fechamentos = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      S.okFech = true; render();
+    }, function () { S.okFech = true; render(); });
+    db.collection('pedidos').orderBy('criadoEm', 'desc').limit(1000).onSnapshot(function (snap) {
       if (S.okPed && S.route.v === 'barraca') {
         var novos = snap.docChanges().some(function (c) { return c.type === 'added' && c.doc.data().status === 'novo'; });
         if (novos) beep();
