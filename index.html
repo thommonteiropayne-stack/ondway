@@ -420,8 +420,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
 
   function statusChamado(sess) {
     if (sess.chamado === 'garcom') return '<div class="banner warn row g8">' + I.bell(18) + ' Seu chamado foi enviado.</div>';
-    if (sess.chamado === 'conta') return '<div class="banner info row g8">' + I.receipt(18) + ' Sua solicitação de fechamento foi enviada. Nossa equipe já foi avisada.</div>';
-    if (sess.chamado === 'parcial') return '<div class="banner info row g8">' + I.receipt(18) + ' ' + esc(sess.chamadoQuem || 'Alguém') + ' pediu para fechar a própria parte.</div>';
+    var meu = sess.chamadoPid === S.pid;
+    if (sess.chamado === 'conta') return '<div class="banner info row g8">' + I.receipt(18) + (meu ? ' Sua solicitação de fechamento foi enviada. Nossa equipe já foi avisada.' : ' ' + esc(sess.chamadoQuem || 'Alguém') + ' pediu o fechamento da conta do guarda-sol.') + '</div>';
+    if (sess.chamado === 'parcial') return '<div class="banner info row g8">' + I.receipt(18) + (meu ? ' Sua solicitação foi enviada. A equipe vai fechar a sua parte.' : ' ' + esc(sess.chamadoQuem || 'Alguém') + ' pediu para fechar a própria parte.') + '</div>';
     return '';
   }
 
