@@ -99,6 +99,13 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
 .gs.novo{background:var(--color-warning);border-color:var(--color-warning);color:#fff}
 .gs.conta{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
 .gs.sel{outline:3px solid var(--color-secondary-dark);outline-offset:3px}
+.gs{position:relative}
+.gs.av{border-radius:12px}
+.gs.ex{border-style:dashed}
+.gs .alerta{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:999px;background:var(--color-danger);border:2px solid #fff}
+.zona-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.zona-col{display:flex;flex-direction:column;gap:10px}
+.zona-lbl{font-size:11px;font-weight:700;color:var(--segment-text);letter-spacing:.06em;text-transform:uppercase;text-align:center}
 .sw{width:14px;height:14px;border-radius:999px;display:inline-block;flex:none}
 .banner{border-radius:var(--radius-md);padding:12px 14px;font-size:14px;line-height:1.45}
 .banner.info{background:var(--color-info-bg);color:var(--color-info)}
@@ -157,7 +164,8 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     return m ? m[1].toLowerCase() : 'teste';
   })();
   var BASE_URL = location.origin + location.pathname + '?b=' + BARRACA;
-  var MAX_GS = 30;
+  var MAX_GS = 30;   // limite do formato (guarda-sóis montados)
+  var POOL = 40;     // plaquinhas QR fixas: 1 a 40
 
   var app = document.getElementById('app');
   var modalSlot = document.getElementById('modal-slot');
@@ -263,8 +271,32 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     // barraca
     tab: 'pedidos', mapaSel: null, fecharGs: null, fecharFoco: null, pagamento: 'Pix', somAtivo: false,
     showNovo: false, ni: { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false },
-    confirmDel: null, cfgNome: null, fmt: null, relPeriodo: 'hoje'
+    confirmDel: null, cfgNome: null, fmt: null, relPeriodo: 'hoje',
+    extras: {}, extForm: null, confirmExt: null
   };
+  var LADOS = [['frente', 'Frente (mar)'], ['esquerda', 'Lado esquerdo'], ['direita', 'Lado direito'], ['atras', 'Atrás']];
+  function ladoNome(k) { for (var i = 0; i < LADOS.length; i++) if (LADOS[i][0] === k) return LADOS[i][1]; return ''; }
+  // montado = dentro do formato; avulso = cliente com guarda-sol próprio; extra = guarda-sol extra da barraca; solto = fora do formato sem cadastro
+  function infoGs(n) {
+    var ext = S.extras[n];
+    if (n <= N() && !ext) return { tipo: 'montado', ext: null };
+    if (ext) return { tipo: ext.tipo === 'extra' ? 'extra' : 'avulso', ext: ext };
+    return { tipo: 'solto', ext: null };
+  }
+  function nomeGs(n) {
+    var t = infoGs(n).tipo;
+    if (t === 'avulso') return 'Avulso ' + pad2(n);
+    if (t === 'extra') return 'Guarda-sol ' + pad2(n) + ' (extra)';
+    return 'Guarda-sol ' + pad2(n);
+  }
+  function descGs(n) {
+    var inf = infoGs(n);
+    if (inf.ext) return [inf.ext.descricao, ladoNome(inf.ext.lado)].filter(Boolean).join(' · ');
+    if (inf.tipo === 'solto') return 'Fora do formato, sem descrição. Registre no Mapa.';
+    return '';
+  }
+  function emUso(n) { var s = S.sessoes['gs-' + n]; return !!(s && s.aberta); }
+  function livresFora() { var r = []; for (var i = N() + 1; i <= POOL; i++) if (!S.extras[i] && !emUso(i)) r.push(i); return r; }
   function N() { return Math.max(1, Math.min(MAX_GS, S.config.linhas * S.config.colunas)); }
   function loading() { return !S.semDb && !S.erro && !(S.okCard && S.okSess && S.okPed && S.okCfg); }
 
@@ -352,7 +384,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
   function viewCliente() {
     var n = S.route.gs, sess = S.sessoes['gs-' + n];
     if (!S.okSess) return '<div class="wrap pad stack g16">' + logo(24) + banners() + '<p class="muted">Carregando…</p></div>';
-    if (n < 1 || n > N()) return '<div class="wrap pad stack g16">' + logo(24) + '<div class="banner warn">Este guarda-sol não existe no mapa da barraca. Procure a equipe.</div></div>';
+    if (n < 1 || n > POOL) return '<div class="wrap pad stack g16">' + logo(24) + '<div class="banner warn">Este guarda-sol não existe no mapa da barraca. Procure a equipe.</div></div>';
     var joined = S.sid && sess && sess.sid === S.sid;
     if (joined && !sess.aberta) return viewEncerrada(n);
     if (!joined || !sess.aberta) return viewBoasVindas(n, sess);
@@ -587,16 +619,16 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       h += '<section class="stack g10"><h2 class="sec-t">Chamados (' + ch.length + ')</h2>' + ch.map(function (s) {
         if (s.chamado === 'conta') {
           return '<div class="chamado conta"><span style="flex:none">' + I.receipt(24) + '</span><div class="stack" style="flex:1;min-width:0;gap:2px">' +
-            '<div style="font-weight:700">Guarda-sol ' + pad2(s.gs) + ' · ' + esc(s.chamadoQuem || s.nome) + '</div><div style="font-size:14px;color:#DDF5F2">Quer fechar a conta · ' + minAgo(s.chamadoEm) + '</div></div>' +
+            '<div style="font-weight:700">' + esc(nomeGs(s.gs)) + ' · ' + esc(s.chamadoQuem || s.nome) + '</div><div style="font-size:14px;color:#DDF5F2">Quer fechar a conta · ' + minAgo(s.chamadoEm) + '</div>' + (descGs(s.gs) ? '<div style="font-size:13px;color:#DDF5F2">' + esc(descGs(s.gs)) + '</div>' : '') + '</div>' +
             '<button class="btn btn-sm" style="background:#fff;color:var(--color-primary);flex:none" data-a="abrirFechar" data-gs="' + s.gs + '">Fechar conta</button></div>';
         }
         if (s.chamado === 'parcial') {
           return '<div class="chamado parcial"><span style="flex:none">' + I.users(24) + '</span><div class="stack" style="flex:1;min-width:0;gap:2px">' +
-            '<div style="font-weight:700">Guarda-sol ' + pad2(s.gs) + ' · ' + esc(s.chamadoQuem || '') + '</div><div style="font-size:14px">Quer fechar só a própria parte · ' + minAgo(s.chamadoEm) + '</div></div>' +
+            '<div style="font-weight:700">' + esc(nomeGs(s.gs)) + ' · ' + esc(s.chamadoQuem || '') + '</div><div style="font-size:14px">Quer fechar só a própria parte · ' + minAgo(s.chamadoEm) + '</div>' + (descGs(s.gs) ? '<div style="font-size:13px">' + esc(descGs(s.gs)) + '</div>' : '') + '</div>' +
             '<button class="btn btn-secondary btn-sm" style="flex:none" data-a="abrirFechar" data-gs="' + s.gs + '">Ver parte</button></div>';
         }
         return '<div class="chamado garcom"><span style="flex:none">' + I.bell(24) + '</span><div class="stack" style="flex:1;min-width:0;gap:2px">' +
-          '<div style="font-weight:700">Guarda-sol ' + pad2(s.gs) + ' · ' + esc(s.chamadoQuem || s.nome) + '</div><div style="font-size:14px">Chamou o garçom · ' + minAgo(s.chamadoEm) + '</div></div>' +
+          '<div style="font-weight:700">' + esc(nomeGs(s.gs)) + ' · ' + esc(s.chamadoQuem || s.nome) + '</div><div style="font-size:14px">Chamou o garçom · ' + minAgo(s.chamadoEm) + '</div>' + (descGs(s.gs) ? '<div style="font-size:13px">' + esc(descGs(s.gs)) + '</div>' : '') + '</div>' +
           '<button class="btn btn-secondary btn-sm" style="flex:none" data-a="atender" data-gs="' + s.gs + '">Indo!</button></div>';
       }).join('') + '</section>';
     }
@@ -604,8 +636,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     if (!nv.length && !loading()) h += '<div class="banner soft">Nenhum pedido novo. ' + (S.somAtivo ? 'Você será avisado quando chegar um.' : 'Ative o som para ser avisado.') + '</div>';
     h += nv.map(function (p) {
       return '<article class="card-strong stack g12"><div class="row between g8"><div class="row g8" style="flex-wrap:wrap">' +
-        '<span class="gschip" style="padding:6px 12px;font-size:15px">Guarda-sol ' + pad2(p.gs) + '</span>' +
+        '<span class="gschip" style="padding:6px 12px;font-size:15px' + (infoGs(p.gs).tipo === 'montado' ? '' : ';background:var(--color-info)') + '">' + esc(nomeGs(p.gs)) + '</span>' +
         '<span style="font-weight:600">' + esc(p.quem || p.nome) + '</span></div><span class="muted num" style="font-size:13px">' + codigo(p.id) + ' · ' + minAgo(p.criadoEm) + '</span></div>' +
+        (descGs(p.gs) ? '<div class="banner ' + (infoGs(p.gs).tipo === 'solto' ? 'warn' : 'info') + ' row g8">' + I.pin(16) + ' ' + esc(descGs(p.gs)) + '</div>' : '') +
         '<div class="stack g4" style="font-size:17px;font-weight:600">' + (p.itens || []).map(function (it) {
           return '<div>' + esc(it.qtd) + '× ' + esc(it.nome) + (it.opcao ? ' · ' + esc(it.opcao) : '') + '</div>';
         }).join('') + '</div>' +
@@ -615,56 +648,105 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var entregues = S.pedidos.filter(function (p) { return p.status === 'entregue'; }).slice(0, 5);
     if (entregues.length) {
       h += '<section class="stack g8"><h2 class="sec-t">Entregues recentemente</h2>' + entregues.map(function (p) {
-        return '<div class="line muted" style="font-size:14px"><span>Guarda-sol ' + pad2(p.gs) + ' · ' + esc(p.quem || p.nome) + ' · ' + (p.itens || []).map(function (it) { return it.qtd + '× ' + esc(it.nome); }).join(', ') + '</span><span class="v">' + brl(p.total) + '</span></div>';
+        return '<div class="line muted" style="font-size:14px"><span>' + esc(nomeGs(p.gs)) + ' · ' + esc(p.quem || p.nome) + ' · ' + (p.itens || []).map(function (it) { return it.qtd + '× ' + esc(it.nome); }).join(', ') + '</span><span class="v">' + brl(p.total) + '</span></div>';
       }).join('') + '</section>';
     }
     return h + '</main>';
   }
 
-  var PRESETS = [[2, 8], [3, 10], [3, 8], [4, 5], [5, 6], [2, 10], [3, 5]];
+  var PRESETS = [[2, 4], [2, 8], [3, 10], [3, 8], [4, 5], [5, 6], [2, 10]];
+  function botaoGs(i) {
+    var inf = infoGs(i), cls = 'gs ' + statusGs(i) + (inf.tipo === 'avulso' || inf.tipo === 'solto' ? ' av' : '') + (inf.tipo === 'extra' ? ' ex' : '') + (S.mapaSel === i ? ' sel' : '');
+    var alerta = inf.tipo === 'solto' || (inf.tipo === 'avulso' && !(inf.ext.descricao || '').trim());
+    return '<button class="' + cls + '" data-a="mapaSel" data-gs="' + i + '" aria-label="' + esc(nomeGs(i)) + '">' + pad2(i) + (alerta ? '<span class="alerta" aria-hidden="true"></span>' : '') + '</button>';
+  }
   function tabMapa() {
     var L = S.config.linhas, C = S.config.colunas, total = N(), grid = '';
-    for (var i = 1; i <= total; i++) {
-      grid += '<button class="gs ' + statusGs(i) + (S.mapaSel === i ? ' sel' : '') + '" data-a="mapaSel" data-gs="' + i + '" aria-label="Guarda-sol ' + i + '">' + pad2(i) + '</button>';
+    for (var i = 1; i <= total; i++) grid += botaoGs(i);
+    // números fora do formato: avulsos, extras e soltos (em uso sem cadastro)
+    var zonas = { frente: [], esquerda: [], direita: [], atras: [] }, soltos = [];
+    for (var k = total + 1; k <= POOL; k++) {
+      var inf = infoGs(k);
+      if (inf.ext) (zonas[inf.ext.lado] || zonas.atras).push(k);
+      else if (emUso(k)) soltos.push(k);
     }
+    function zona(lista, cls) { return '<div class="' + cls + '">' + lista.map(botaoGs).join('') + '</div>'; }
     var det = '';
-    if (S.mapaSel && S.mapaSel <= total) {
-      var i2 = S.mapaSel, s = S.sessoes['gs-' + i2], st2 = statusGs(i2);
+    if (S.mapaSel) {
+      var i2 = S.mapaSel, s = S.sessoes['gs-' + i2], st2 = statusGs(i2), inf2 = infoGs(i2);
       var labels = { livre: 'Livre', ocupado: 'Conta aberta', novo: 'Pedido novo ou chamado', conta: 'Quer fechar a conta' };
-      det = '<section class="card-strong stack g10" aria-live="polite"><div class="row between g8" style="align-items:baseline"><div class="disp" style="font-weight:800;font-size:19px">Guarda-sol ' + pad2(i2) + '</div><div class="muted" style="font-size:13px;font-weight:600">' + labels[st2] + '</div></div>';
+      var tipos = { montado: 'Guarda-sol do formato', avulso: 'Avulso · cliente com guarda-sol próprio', extra: 'Guarda-sol extra da barraca', solto: 'Fora do formato, sem cadastro' };
+      det = '<section class="card-strong stack g10" aria-live="polite"><div class="row between g8" style="align-items:baseline"><div class="disp" style="font-weight:800;font-size:19px">' + esc(nomeGs(i2)) + '</div><div class="muted" style="font-size:13px;font-weight:600">' + labels[st2] + '</div></div>' +
+        '<div class="muted" style="font-size:14px">' + tipos[inf2.tipo] + '</div>';
+      if (inf2.ext) det += '<div class="banner info row g8" style="align-items:flex-start">' + I.pin(16) + '<span>' + esc(descGs(i2) || 'Sem descrição') + '</span></div>';
       if (s && s.aberta) {
-        var ps = S.pedidos.filter(function (p) { return p.sid === s.sid; });
-        var gr = porPessoa(s, ps);
+        var gr = porPessoa(s, S.pedidos.filter(function (p) { return p.sid === s.sid; }));
         det += '<div class="line"><span class="muted">Pessoas na conta</span><span>' + esc(gr.map(function (g) { return g.nome; }).join(', ')) + '</span></div>' +
           '<div class="line"><span class="muted">Em aberto</span><strong class="v">' + brl(gr.reduce(function (t, g) { return t + g.emAberto; }, 0)) + '</strong></div>' +
           '<button class="btn btn-dark btn-block" data-a="abrirFechar" data-gs="' + i2 + '">Ver conta por pessoa</button>';
-      } else det += '<p class="muted" style="font-size:14px">Ninguém neste guarda-sol agora.</p>';
+      } else det += '<p class="muted" style="font-size:14px">Ninguém usando este número agora.</p>';
+      if (inf2.tipo !== 'montado') {
+        var del = S.confirmExt === i2;
+        det += '<div class="row g8"><button class="btn btn-secondary btn-sm" style="flex:1" data-a="extEditar" data-gs="' + i2 + '">' + (inf2.ext ? 'Editar descrição e lado' : 'Cadastrar no mapa') + '</button>' +
+          (inf2.ext && !(s && s.aberta) ? '<button class="btn btn-ghost btn-sm" style="flex:1;' + (del ? 'color:var(--color-danger);border-color:var(--color-danger)' : '') + '" data-a="extRemover" data-gs="' + i2 + '">' + (del ? 'Confirmar remoção' : 'Tirar do mapa') + '</button>' : '') + '</div>';
+      }
       det += '</section>';
+    }
+    var form = '';
+    if (S.extForm) {
+      var F = S.extForm, livres = livresFora(), novo = !F.editando;
+      if (novo && livres.indexOf(+F.n) < 0 && livres.length) F.n = livres[0];
+      form = '<form data-form="extSalvar" class="card-strong stack g12"><h2>' + (novo ? 'Adicionar fora do formato' : 'Editar ' + esc(nomeGs(+F.n))) + '</h2>' +
+        (novo ? (livres.length ? '<div><label class="lbl" for="ext-n">Número da plaquinha</label><select class="input" id="ext-n" data-bind="extForm.n">' + livres.map(function (x) { return '<option value="' + x + '"' + (+F.n === x ? ' selected' : '') + '>' + pad2(x) + (x === livres[0] ? ' (próximo da sequência)' : '') + '</option>'; }).join('') + '</select></div>'
+          : '<div class="banner warn">Todos os números de ' + (N() + 1) + ' a ' + POOL + ' estão em uso.</div>') : '') +
+        '<fieldset style="margin:0;padding:0;border:none"><legend class="lbl" style="padding:0">Tipo</legend><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">' +
+        [['avulso', 'Avulso', 'cliente com guarda-sol próprio'], ['extra', 'Guarda-sol extra', 'montado pela barraca']].map(function (t) {
+          var on = F.tipo === t[0];
+          return '<button type="button" class="opt' + (on ? ' on' : '') + '" style="min-height:64px;white-space:normal;line-height:1.25" aria-pressed="' + on + '" data-a="extTipo" data-t="' + t[0] + '"><strong>' + t[1] + '</strong><br><span style="font-size:12px;font-weight:400">' + t[2] + '</span></button>';
+        }).join('') + '</div></fieldset>' +
+        '<div><label class="lbl" for="ext-desc">Descrição ' + (F.tipo === 'avulso' ? '<span style="color:var(--color-danger)">*</span>' : '(opcional)') + '</label><textarea class="input" id="ext-desc" rows="2" data-bind="extForm.desc" placeholder="Ex.: família 5 pessoas, short vermelho, guarda-sol azul" maxlength="140">' + esc(F.desc || '') + '</textarea></div>' +
+        '<fieldset style="margin:0;padding:0;border:none"><legend class="lbl" style="padding:0">Onde fica</legend><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">' +
+        LADOS.map(function (l) { var on = F.lado === l[0]; return '<button type="button" class="opt solid' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="extLado" data-l="' + l[0] + '">' + l[1] + '</button>'; }).join('') + '</div></fieldset>' +
+        '<div class="row g8"><button class="btn btn-primary" style="flex:2" type="submit"' + (S.busy || (novo && !livres.length) ? ' disabled' : '') + '>Salvar</button><button class="btn btn-ghost" style="flex:1" type="button" data-a="extCancelar">Cancelar</button></div></form>';
     }
     var f = S.fmt || { l: L, c: C };
     var ft = f.l * f.c, excede = ft > MAX_GS, igual = f.l === L && f.c === C;
     var editor = '<section class="card stack g12"><div class="row between"><h2 style="font-size:18px">Formato do mapa</h2><span class="muted num" style="font-size:14px">' + L + ' × ' + C + ' = ' + total + '</span></div>' +
-      '<p class="muted" style="font-size:14px">Escolha quantas fileiras (a partir do mar) e quantos guarda-sóis em cada fileira. Limite de ' + MAX_GS + '.</p>' +
+      '<p class="muted" style="font-size:14px">Quantos guarda-sóis a barraca montou hoje: fileiras (a partir do mar) × guarda-sóis por fileira. Eles usam as plaquinhas de 01 a ' + pad2(total) + '. Limite de ' + MAX_GS + '.</p>' +
       '<div class="chips" role="group" aria-label="Formatos prontos">' + PRESETS.map(function (p) {
         var on = f.l === p[0] && f.c === p[1];
         return '<button class="opt solid' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="fmtPreset" data-l="' + p[0] + '" data-c="' + p[1] + '">' + p[0] + '×' + p[1] + '</button>';
       }).join('') + '</div>' +
       '<div class="row between g12"><span>Fileiras</span><div class="stepper"><button class="sbtn" data-a="fmt" data-k="l" data-d="-1" aria-label="Menos uma fileira">' + I.minus() + '</button><span class="qtd">' + f.l + '</span><button class="sbtn dark" data-a="fmt" data-k="l" data-d="1" aria-label="Mais uma fileira">' + I.plus(18) + '</button></div></div>' +
       '<div class="row between g12"><span>Por fileira</span><div class="stepper"><button class="sbtn" data-a="fmt" data-k="c" data-d="-1" aria-label="Menos um por fileira">' + I.minus() + '</button><span class="qtd">' + f.c + '</span><button class="sbtn dark" data-a="fmt" data-k="c" data-d="1" aria-label="Mais um por fileira">' + I.plus(18) + '</button></div></div>' +
-      (excede ? '<div class="banner err">' + f.l + ' × ' + f.c + ' = ' + ft + ' guarda-sóis. O limite é ' + MAX_GS + '.</div>' : '<div class="banner soft num">Novo formato: ' + f.l + ' × ' + f.c + ' = <strong>' + ft + ' guarda-sóis</strong></div>') +
+      (excede ? '<div class="banner err">' + f.l + ' × ' + f.c + ' = ' + ft + ' guarda-sóis. O limite é ' + MAX_GS + '.</div>' : '<div class="banner soft num">Novo formato: ' + f.l + ' × ' + f.c + ' = <strong>' + ft + ' guarda-sóis</strong> (plaquinhas 01 a ' + pad2(ft) + ')</div>') +
       '<button class="btn btn-primary btn-block" data-a="salvarFmt"' + (excede || igual || S.busy ? ' disabled' : '') + '>Salvar formato</button></section>';
-    return headerBarraca('Mapa') + '<main class="stack g16" style="padding:16px">' + banners() +
-      '<div class="row g16" style="flex-wrap:wrap;font-size:13px">' +
+    var usados = Object.keys(S.extras).length + soltos.length;
+    return headerBarraca('Mapa', S.extForm ? '' : '<button class="btn btn-primary btn-sm" data-a="extNovo">' + I.plus(18) + ' Avulso / extra</button>') + '<main class="stack g16" style="padding:16px">' + banners() + form +
+      '<div class="stack g8" style="font-size:13px"><div class="row g16" style="flex-wrap:wrap">' +
       '<span class="row g6"><span class="sw" style="border:2px solid var(--color-border-strong)"></span>Livre</span>' +
       '<span class="row g6"><span class="sw" style="background:var(--color-secondary-light);border:2px solid var(--color-secondary-dark)"></span>Ocupado</span>' +
       '<span class="row g6"><span class="sw" style="background:var(--color-warning)"></span>Pedido / chamado</span>' +
       '<span class="row g6"><span class="sw" style="background:var(--color-primary)"></span>Fechar conta</span></div>' +
+      '<div class="row g16" style="flex-wrap:wrap">' +
+      '<span class="row g6"><span class="sw" style="border-radius:4px;border:2px solid var(--color-text-secondary)"></span>Avulso</span>' +
+      '<span class="row g6"><span class="sw" style="border:2px dashed var(--color-text-secondary)"></span>Guarda-sol extra</span>' +
+      '<span class="row g6"><span class="sw" style="background:var(--color-danger)"></span>Falta descrição</span></div></div>' +
       '<div class="stack g10" style="border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:12px;background:var(--segment-background)">' +
       '<div style="height:30px;border-radius:var(--radius-sm);background:var(--color-secondary-light);color:var(--segment-text);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.08em">MAR</div>' +
-      (C > 6 ? '<p class="muted" style="font-size:13px;text-align:center">Arraste para os lados para ver todos os guarda-sóis.</p>' : '') +
-      '<div class="mapa-scroll"><div class="gsgrid" style="grid-template-columns:repeat(' + C + ',48px)">' + grid + '</div></div>' +
+      (C > 5 ? '<p class="muted" style="font-size:13px;text-align:center">Arraste para os lados para ver todos os guarda-sóis.</p>' : '') +
+      '<div class="mapa-scroll"><div style="display:grid;grid-template-columns:auto auto auto;grid-template-areas:\'. f .\' \'e g d\' \'. a .\';gap:12px;width:max-content;margin:0 auto;align-items:center">' +
+      '<div style="grid-area:f">' + zona(zonas.frente, 'zona-row') + '</div>' +
+      '<div style="grid-area:e">' + zona(zonas.esquerda, 'zona-col') + '</div>' +
+      '<div style="grid-area:g"><div class="gsgrid" style="grid-template-columns:repeat(' + C + ',48px)">' + grid + '</div></div>' +
+      '<div style="grid-area:d">' + zona(zonas.direita, 'zona-col') + '</div>' +
+      '<div style="grid-area:a">' + zona(zonas.atras, 'zona-row') + '</div>' +
+      '</div></div>' +
       '<div class="disp" style="height:46px;border-radius:var(--radius-md);background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">' + esc(S.config.nome) + '</div></div>' +
-      det + editor + '</main>';
+      (soltos.length ? '<section class="banner warn stack g8"><strong>Em uso sem cadastro no mapa</strong><span>Alguém está pedindo por estas plaquinhas. Toque para dizer onde estão.</span><div class="zona-row" style="justify-content:flex-start">' + soltos.map(botaoGs).join('') + '</div></section>' : '') +
+      det +
+      '<p class="muted" style="font-size:13px">Plaquinhas: 01 a ' + pad2(total) + ' no formato · ' + usados + ' em uso fora do formato · ' + livresFora().length + ' livres (até ' + POOL + ').</p>' +
+      editor + '</main>';
   }
 
   function tabCardapio() {
@@ -745,17 +827,18 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
   }
 
   function tabQr() {
-    var total = N(), cards = '';
-    for (var i = 1; i <= total; i++) {
-      var url = BASE_URL + '#gs-' + i;
-      cards += '<div class="card stack g8" style="padding:12px;align-items:center"><div class="qr" style="padding:4px" data-qr="' + esc(url) + '" data-size="130"></div>' +
-        '<div class="disp" style="font-weight:800;font-size:16px">Guarda-sol ' + pad2(i) + '</div><a href="#gs-' + i + '" style="font-size:13px;font-weight:600">Abrir aqui</a></div>';
+    var cards = '';
+    for (var i = 1; i <= POOL; i++) {
+      var url = BASE_URL + '#gs-' + i, inf = infoGs(i);
+      var tag = inf.tipo === 'montado' ? '<span class="status status-success">No formato</span>' : inf.tipo === 'avulso' ? '<span class="status status-info">Avulso</span>' : inf.tipo === 'extra' ? '<span class="status status-info">Extra</span>' : emUso(i) ? '<span class="status status-warning">Em uso</span>' : '<span class="status status-unavailable">Reserva</span>';
+      cards += '<div class="card stack g8" style="padding:12px;align-items:center"><div class="qr" style="padding:4px" data-qr="' + esc(url) + '" data-size="120"></div>' +
+        '<div class="disp" style="font-weight:800;font-size:16px">Nº ' + pad2(i) + '</div>' + tag + '<a href="#gs-' + i + '" style="font-size:13px;font-weight:600">Abrir aqui</a></div>';
     }
     var nomeVal = S.cfgNome == null ? S.config.nome : S.cfgNome;
     return headerBarraca('QR Codes') + '<main class="stack g16" style="padding:16px">' + banners() +
       '<form data-form="salvarNome" class="card stack g10"><label class="lbl" for="cfg-nome" style="margin:0">Nome da barraca</label>' +
       '<div class="row g8"><input class="input" id="cfg-nome" data-bind="cfgNome" value="' + esc(nomeVal) + '" maxlength="40"><button class="btn btn-dark" type="submit">Salvar</button></div></form>' +
-      '<p class="muted" style="font-size:14px">Um QR Code por guarda-sol do mapa (' + total + '). Para mudar a quantidade, ajuste o formato na aba Mapa.</p>' +
+      '<p class="muted" style="font-size:14px">São ' + POOL + ' plaquinhas fixas, que nunca mudam. As de 01 a ' + pad2(N()) + ' vão nos guarda-sóis do formato. As demais servem para avulsos e guarda-sóis extras, seguindo a sequência.</p>' +
       '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">' + cards + '</div>' +
       '<a href="#" class="btn btn-ghost btn-block">Tela inicial do teste</a></main>';
   }
@@ -763,7 +846,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
   function viewFechar() {
     var n = S.fecharGs, s = S.sessoes['gs-' + n];
     var topo = '<header class="top stack g6"><button class="linkbtn" data-a="voltarFechar">' + I.back() + ' Voltar</button>';
-    if (!s || !s.aberta) return '<div class="wrap">' + topo + '<h1>Conta do Guarda-sol ' + pad2(n) + '</h1></header><main class="pad stack g16"><div class="banner soft">Esta conta já está fechada e o guarda-sol está livre.</div></main></div>';
+    if (!s || !s.aberta) return '<div class="wrap">' + topo + '<h1>Conta · ' + esc(nomeGs(n)) + '</h1></header><main class="pad stack g16"><div class="banner soft">Esta conta já está fechada e o número está livre.</div></main></div>';
     var ps = S.pedidos.filter(function (p) { return p.sid === s.sid; });
     var grupos = porPessoa(s, ps);
     var emAberto = grupos.reduce(function (t, g) { return t + g.emAberto; }, 0);
@@ -773,7 +856,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var foco = S.fecharFoco;
     grupos.sort(function (a, b) { return (b.pid === foco) - (a.pid === foco); });
     var formas = ['Pix', 'Cartão', 'Dinheiro'];
-    var h = '<div class="wrap">' + topo + '<h1>Conta do Guarda-sol ' + pad2(n) + '</h1><div class="loc">' + I.users(16) + ' ' + grupos.length + ' pessoa' + (grupos.length > 1 ? 's' : '') + ' · aberta por ' + esc(s.nome) + ' às ' + hora(s.desde) + '</div></header>' +
+    var h = '<div class="wrap">' + topo + '<h1>Conta · ' + esc(nomeGs(n)) + '</h1>' + (descGs(n) ? '<div class="muted" style="font-size:14px">' + esc(descGs(n)) + '</div>' : '') + '<div class="loc">' + I.users(16) + ' ' + grupos.length + ' pessoa' + (grupos.length > 1 ? 's' : '') + ' · aberta por ' + esc(s.nome) + ' às ' + hora(s.desde) + '</div></header>' +
       '<main class="stack g16" style="padding:16px">' + banners() +
       (pend ? '<div class="banner warn">Ainda há ' + pend + ' pedido' + (pend > 1 ? 's' : '') + ' não entregue' + (pend > 1 ? 's' : '') + ' nesta conta.</div>' : '') +
       (s.chamado === 'parcial' ? '<div class="banner info">' + esc(s.chamadoQuem || '') + ' pediu para fechar só a própria parte.</div>' : '') +
@@ -900,7 +983,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         return;
       }
       // barraca
-      case 'tab': S.tab = d.t; S.mapaSel = null; S.confirmDel = null; S.fmt = null; S.top = true; render(); return;
+      case 'tab': S.tab = d.t; S.mapaSel = null; S.confirmDel = null; S.fmt = null; S.extForm = null; S.confirmExt = null; S.top = true; render(); return;
       case 'som': ativarSom(); return;
       case 'atender': w(function () { return gsRef(d.gs).update({ chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null }); }); return;
       case 'entregue': w(function () { return S.db.doc('pedidos/' + d.id).update({ status: 'entregue', entregueEm: Date.now() }); }); return;
@@ -932,11 +1015,37 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         w(function () {
           return emSerie(abertos, function (p) { return S.db.doc('pedidos/' + p.id).update({ pago: true, pagoEm: agora2 }); })
             .then(function () { return S.db.collection('fechamentos').add({ tipo: 'total', gs: n, sid: s.sid, quem: nomes || s.nome, total: resto, pagamento: forma2, pagantes: s.pagantes || 1, itens: agregarItens(abertos).linhas, em: agora2 }); })
-            .then(function () { return gsRef(n).update({ aberta: false, chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null, pagoEm: agora2 }); });
-        }).then(function (ok) { S.busy = false; if (ok) { S.fecharGs = null; S.mapaSel = null; toast('Conta fechada. Guarda-sol ' + pad2(n) + ' liberado.'); } render(); });
+            .then(function () { return gsRef(n).update({ aberta: false, chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null, pagoEm: agora2 }); })
+            .then(function () { var ex = S.extras[n]; if (ex && ex.tipo !== 'extra') return S.db.doc('extras/gs-' + n).delete(); });
+        }).then(function (ok) { S.busy = false; if (ok) { S.fecharGs = null; S.mapaSel = null; toast('Conta fechada. ' + nomeGs(n) + ' liberado.'); } render(); });
         return;
       }
-      case 'mapaSel': S.mapaSel = +d.gs; render(); return;
+      case 'mapaSel': S.mapaSel = +d.gs; S.confirmExt = null; render(); return;
+      case 'extNovo': { var lv = livresFora(); S.extForm = { n: lv[0] || '', tipo: 'avulso', desc: '', lado: 'esquerda', editando: false }; S.mapaSel = null; S.top = true; render(); return; }
+      case 'extEditar': {
+        var e0 = S.extras[+d.gs];
+        S.extForm = { n: +d.gs, tipo: e0 ? (e0.tipo === 'extra' ? 'extra' : 'avulso') : 'avulso', desc: e0 ? e0.descricao || '' : '', lado: e0 ? e0.lado || 'esquerda' : 'esquerda', editando: true }; S.top = true; render(); return;
+      }
+      case 'extTipo': S.extForm.tipo = d.t; render(); return;
+      case 'extLado': S.extForm.lado = d.l; render(); return;
+      case 'extCancelar': S.extForm = null; render(); return;
+      case 'extSalvar': {
+        var F = S.extForm; if (!F || S.busy) return;
+        var num = +F.n, desc = (F.desc || '').trim();
+        if (!(num > N() && num <= POOL)) { toast('Escolha um número fora do formato.'); return; }
+        if (F.tipo === 'avulso' && !desc) { toast('Descreva o grupo do avulso para o garçom achar.'); return; }
+        S.busy = true; render();
+        w(function () { return S.db.doc('extras/gs-' + num).set({ gs: num, tipo: F.tipo, descricao: desc, lado: F.lado, em: Date.now() }); })
+          .then(function (ok) { S.busy = false; if (ok) { S.extForm = null; S.mapaSel = num; toast((F.tipo === 'extra' ? 'Guarda-sol extra ' : 'Avulso ') + pad2(num) + ' no mapa.'); } render(); });
+        return;
+      }
+      case 'extRemover': {
+        var nr = +d.gs; if (emUso(nr)) { toast('Feche a conta antes de tirar do mapa.'); return; }
+        if (S.confirmExt !== nr) { S.confirmExt = nr; render(); return; }
+        S.confirmExt = null;
+        w(function () { return S.db.doc('extras/gs-' + nr).delete(); }).then(function (ok) { if (ok) { S.mapaSel = null; toast('Nº ' + pad2(nr) + ' tirado do mapa.'); } render(); });
+        return;
+      }
       case 'relPeriodo': S.relPeriodo = d.p; render(); return;
       case 'fmtPreset': S.fmt = { l: +d.l, c: +d.c }; render(); return;
       case 'fmt': {
@@ -946,7 +1055,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       case 'salvarFmt': {
         var nf = S.fmt; if (!nf || nf.l * nf.c > MAX_GS) return;
         var abertasFora = Object.keys(S.sessoes).filter(function (k) { var x = S.sessoes[k]; return x.aberta && x.gs > nf.l * nf.c; });
-        if (abertasFora.length) { toast('Há contas abertas em guarda-sóis que sairiam do mapa. Feche-as antes.'); return; }
+        if (abertasFora.length) { toast('Há contas abertas em guarda-sóis que sairiam do formato. Feche-as antes.'); return; }
+        var conflito = Object.keys(S.extras).map(Number).filter(function (x) { return x <= nf.l * nf.c; });
+        if (conflito.length) { toast('As plaquinhas ' + conflito.map(pad2).join(', ') + ' estão em uso como avulso/extra. Tire-as do mapa antes de aumentar o formato.'); return; }
         S.busy = true; render();
         w(function () { return S.db.doc('config/barraca').set({ nome: S.config.nome, linhas: nf.l, colunas: nf.c, guardasois: nf.l * nf.c }); })
           .then(function (ok) { S.busy = false; if (ok) { S.fmt = null; toast('Formato salvo: ' + nf.l + ' × ' + nf.c + ' = ' + nf.l * nf.c + ' guarda-sóis.'); } render(); });
@@ -1035,6 +1146,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       if (avisar && S.route.v === 'barraca') beep();
       checkLoaded(); render();
     }, onErr);
+    db.collection('extras').onSnapshot(function (snap) {
+      var m = {}; snap.docs.forEach(function (d) { var x = d.data(); if (x && x.gs) m[x.gs] = x; }); S.extras = m; render();
+    }, function () {});
     db.collection('fechamentos').where('em', '>=', inicioPeriodo('7d')).orderBy('em', 'desc').limit(1000).onSnapshot(function (snap) {
       S.fechamentos = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); S.okFech = true; render();
     }, function () { S.okFech = true; render(); });
