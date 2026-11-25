@@ -93,8 +93,8 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
 .space-nav{height:110px}
 .space-bar{height:110px}
 .mapa-scroll{overflow-x:auto;padding:4px 2px 8px}
-.gsgrid{display:grid;gap:10px;width:max-content;margin:0 auto}
-.gs{width:48px;height:48px;border-radius:999px;border:2px solid var(--color-border-strong);background:var(--color-surface);color:var(--color-text-secondary);font:700 15px var(--font-body);cursor:pointer;font-variant-numeric:tabular-nums}
+.gsgrid{display:grid;gap:var(--gsgap,10px);width:max-content;margin:0 auto}
+.gs{width:var(--gs,48px);height:var(--gs,48px);padding:0;border-radius:999px;border:2px solid var(--color-border-strong);background:var(--color-surface);color:var(--color-text-secondary);font:700 var(--gsf,15px) var(--font-body);cursor:pointer;font-variant-numeric:tabular-nums}
 .gs.ocupado{background:var(--color-secondary-light);border-color:var(--color-secondary-dark);color:var(--color-text-primary)}
 .gs.novo{background:var(--color-warning);border-color:var(--color-warning);color:#fff}
 .gs.conta{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
@@ -103,8 +103,16 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
 .gs.av{border-radius:12px}
 .gs.ex{border-style:dashed}
 .gs .alerta{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:999px;background:var(--color-danger);border:2px solid #fff}
-.zona-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.zona-col{display:flex;flex-direction:column;gap:10px}
+.zona-row{display:flex;gap:var(--gsgap,10px);justify-content:center;flex-wrap:wrap}
+.zona-col{display:flex;flex-direction:column;gap:var(--gsgap,10px)}
+.btn-danger{background:var(--button-danger-bg);border-color:var(--button-danger-bg);color:var(--button-danger-text)}
+.btn-outline-danger{background:var(--color-surface);border-color:var(--color-danger);color:var(--color-danger)}
+.somalerta{display:flex;width:100%;align-items:center;gap:10px;border:none;border-radius:var(--radius-md);padding:14px;background:var(--color-danger);color:#fff;font:700 15px var(--font-body);text-align:left;cursor:pointer;min-height:56px}
+.edped{border:1px solid var(--color-border);border-radius:var(--radius-md);padding:12px;display:flex;flex-direction:column;gap:8px}
+.edlin{display:flex;align-items:center;gap:10px}
+.edlin .nm{flex:1;min-width:0;font-size:15px}
+.edlin.zero .nm{text-decoration:line-through;color:var(--color-text-muted)}
+.recusa{border-top:1px solid var(--color-border);padding-top:12px;display:flex;flex-direction:column;gap:12px}
 .zona-lbl{font-size:11px;font-weight:700;color:var(--segment-text);letter-spacing:.06em;text-transform:uppercase;text-align:center}
 .sw{width:14px;height:14px;border-radius:999px;display:inline-block;flex:none}
 .banner{border-radius:var(--radius-md);padding:12px 14px;font-size:14px;line-height:1.45}
@@ -272,8 +280,38 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     tab: 'pedidos', mapaSel: null, fecharGs: null, fecharFoco: null, pagamento: 'Pix', somAtivo: false,
     showNovo: false, ni: { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false },
     confirmDel: null, cfgNome: null, fmt: null, relPeriodo: 'hoje',
-    extras: {}, extForm: null, confirmExt: null
+    extras: {}, extForm: null, confirmExt: null,
+    todosPedidos: [], recusa: null, rcVistos: null,
+    editConta: false, pinOkAte: 0, pinIn: '', pinIn2: '', draft: {}, confirmCancel: null
   };
+  // PIN do dono: guardado só como código embaralhado. Não é segurança forte (o banco ainda
+  // está em modo de teste), mas evita que garçom ou cliente edite pedido por engano.
+  function hashPin(p) {
+    var s = 'ondway:' + BARRACA + ':' + p, h1 = 0x811c9dc5, h2 = 5381;
+    for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619) >>> 0; h2 = (Math.imul(h2, 33) + c) >>> 0; }
+    return h1.toString(16) + h2.toString(16);
+  }
+  function pinValido() { return Date.now() < S.pinOkAte; }
+  function juntar(l) { return l.length <= 1 ? (l[0] || '') : l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1]; }
+  var MOTIVOS = [['acabou', 'Acabou'], ['gelado', 'Não está gelado'], ['outro', 'Outro motivo']];
+  function msgRecusa(motivo, nomes, texto, parcial) {
+    var lista = juntar(nomes), pl = nomes.length > 1, base;
+    if (motivo === 'acabou') base = 'Poxa, ' + lista.charAt(0).toLowerCase() + lista.slice(1) + (pl ? ' acabaram' : ' acabou') + ' por hoje.';
+    else if (motivo === 'gelado') base = lista + (pl ? ' ainda não estão' : ' ainda não está') + ' na temperatura ideal, e preferimos não servir assim.';
+    else base = (texto || '').trim() ? (texto || '').trim().replace(/[.!]?$/, '.') : 'Não vamos conseguir servir ' + lista + ' agora.';
+    return base + ' Desculpe o transtorno!' + (parcial ? ' Já tiramos isso da sua conta, e o resto do seu pedido segue normalmente.' : ' Já tiramos da sua conta, você não paga nada por isso.') + ' Que tal escolher outra coisa no cardápio?';
+  }
+  function chaveRecusa(p) { return 'ondway-rc-' + p.id + '-' + (p.recusa && p.recusa.em); }
+  function avisosRecusa() {
+    if (!S.sid) return [];
+    return S.todosPedidos.filter(function (p) { return p.recusa && p.sid === S.sid && (p.pid ? p.pid === S.pid : true) && !LS.get(chaveRecusa(p)); });
+  }
+  function bannersRecusa() {
+    return avisosRecusa().map(function (p) {
+      return '<div class="banner warn stack g8" role="alert"><strong style="font-size:15px">Um item do seu pedido não vai dar</strong><span style="color:var(--color-text-primary)">' + esc(p.recusa.msg) + '</span>' +
+        '<button class="btn btn-secondary btn-sm" style="align-self:flex-start" data-a="rcOk" data-k="' + esc(chaveRecusa(p)) + '">Entendi</button></div>';
+    }).join('');
+  }
   var LADOS = [['frente', 'Frente (mar)'], ['esquerda', 'Lado esquerdo'], ['direita', 'Lado direito'], ['atras', 'Atrás']];
   function ladoNome(k) { for (var i = 0; i < LADOS.length; i++) if (LADOS[i][0] === k) return LADOS[i][1]; return ''; }
   // montado = dentro do formato; avulso = cliente com guarda-sol próprio; extra = guarda-sol extra da barraca; solto = fora do formato sem cadastro
@@ -324,23 +362,50 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
   }
 
   // ---------- Som ----------
-  var actx = null;
-  function ativarSom() {
-    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.resume) actx.resume(); S.somAtivo = true; beep(); }
-    catch (e) { toast('Este navegador não liberou o som.'); }
-    render();
+  // O navegador só libera o som depois de um toque na tela. O painel libera sozinho no
+  // primeiro toque e mantém ligado; não há botão para desligar.
+  var actx = null, wakeLock = null;
+  function somLiberado() { return !!(actx && actx.state === 'running'); }
+  function atualizaSom() { var ok = somLiberado(); if (ok !== S.somAtivo) { S.somAtivo = ok; setTimeout(function () { if (!isTyping()) render(); }, 450); } } // espera o clique terminar antes de redesenhar
+  function destravarSom(testar) {
+    try {
+      if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        actx.onstatechange = atualizaSom;
+      }
+      var r = actx.state !== 'running' && actx.resume ? actx.resume() : null;
+      Promise.resolve(r).then(function () { atualizaSom(); if (testar) beep(); });
+    } catch (e) { if (testar) toast('Este navegador não liberou o som.'); }
+  }
+  function manterTelaAcesa() {
+    if (S.route.v !== 'barraca' || wakeLock || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+    navigator.wakeLock.request('screen').then(function (l) {
+      wakeLock = l; l.addEventListener('release', function () { wakeLock = null; });
+    }).catch(function () {});
   }
   function beep() {
-    try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) {}
-    if (!actx || !S.somAtivo) return;
+    try { if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 600]); } catch (e) {}
+    if (!somLiberado()) return;
     try {
-      [0, 0.22].forEach(function (d) {
-        var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + d;
-        o.type = 'sine'; o.frequency.value = 880;
-        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.2);
+      var mestre = actx.createGain(); mestre.gain.value = 0.9; mestre.connect(actx.destination);
+      // duas sequências de três notas subindo, em onda quadrada (bem mais audível que a senoidal)
+      [[1047, 0], [1319, 0.15], [1568, 0.3], [1047, 0.6], [1319, 0.75], [1568, 0.9]].forEach(function (n) {
+        var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + n[1];
+        o.type = 'square'; o.frequency.value = n[0];
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.7, t + 0.01); g.gain.setValueAtTime(0.7, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+        o.connect(g); g.connect(mestre); o.start(t); o.stop(t + 0.15);
       });
     } catch (e) {}
+  }
+  ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, function () { if (S.route.v === 'barraca') { if (!somLiberado()) destravarSom(false); manterTelaAcesa(); } }, true);
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && S.route.v === 'barraca') { if (actx) destravarSom(false); manterTelaAcesa(); }
+  });
+  function avisoSom() {
+    if (S.route.v !== 'barraca' || S.somAtivo) return '';
+    return '<button class="somalerta" data-a="som">' + I.sound(22) + '<span>Som desligado. Toque aqui para ligar o aviso de pedidos.</span></button>';
   }
 
   // ---------- Escrita ----------
@@ -486,7 +551,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '<span class="row g10"><span class="num" style="min-width:28px;height:28px;border-radius:999px;background:#fff;color:var(--button-primary-bg);display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;padding:0 6px">' + qtd + '</span>Ver meu pedido</span>' +
       '<span class="num">' + brl(tot) + '</span></button></div></div>' : '';
     return '<div class="wrap">' + headerCliente(n, sess, chips) +
-      '<main class="stack g8" style="padding:12px 16px 20px">' + banners() + statusChamado(sess) +
+      '<main class="stack g8" style="padding:12px 16px 20px">' + banners() + bannersRecusa() + statusChamado(sess) +
       '<div class="stack g4" style="margin-top:4px"><h1 style="font-size:24px">Nosso cardápio</h1><p class="muted" style="font-size:14px">Escolha o que deseja e adicione ao seu pedido.</p></div>' + body + '</main>' +
       (qtd ? '<div class="space-bar"></div>' : rodape()) + bar + '</div>';
   }
@@ -541,7 +606,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var h = '<div class="wrap"><header class="top stack g10"><div class="row between g10"><h1>Minha conta</h1>' +
       '<div class="loc">' + I.pin(16) + ' Guarda-sol ' + pad2(n) + '</div></div>';
     if (S.enviado) h += '<div class="banner ok stack g4"><span class="row g8">' + I.check(20) + ' Pedido enviado com sucesso!</span><span style="font-weight:400">Agora é só aguardar. O estabelecimento já recebeu seu pedido ' + esc(S.enviado) + '.</span></div>';
-    h += '</header><main class="stack g16" style="padding:14px 16px 20px">' + banners() + statusChamado(sess);
+    h += '</header><main class="stack g16" style="padding:14px 16px 20px">' + banners() + bannersRecusa() + statusChamado(sess);
     if (meu && meu.pedidos.length && !meu.abertos.length) h += '<div class="banner ok">Sua parte já foi paga. Obrigado! Se pedir mais, entra numa nova parte.</div>';
     h += pessoaCard(meu || { key: 'eu', nome: S.meuNome || 'Você', pedidos: [], abertos: [], pagos: [], emAberto: 0, pago: 0, itens: { linhas: [] } }, true, false);
     if (outros.length) h += '<p class="sec-t" style="margin-top:4px">Também neste guarda-sol</p>' + outros.map(function (g) { return pessoaCard(g, false, false); }).join('');
@@ -606,12 +671,14 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
   function viewBarraca() {
     if (S.fecharGs != null) return viewFechar();
     var c = S.tab === 'mapa' ? tabMapa() : S.tab === 'cardapio' ? tabCardapio() : S.tab === 'qr' ? tabQr() : S.tab === 'relatorio' ? tabRelatorio() : tabPedidos();
+    var av = avisoSom();
+    if (av) c = c.replace('</header>', '</header><div style="padding:12px 16px 0">' + av + '</div>');
     return '<div class="wrap">' + c + '<div class="space-nav"></div>' + navBarraca() + '</div>';
   }
 
   function tabPedidos() {
-    var som = S.somAtivo ? '<span class="status status-success">' + I.sound(16) + ' Som ligado</span>'
-      : '<button class="btn btn-primary btn-sm" data-a="som">' + I.sound() + ' Ativar som</button>';
+    var som = S.somAtivo ? '<button class="status status-success" style="border:none;cursor:pointer;min-height:36px" data-a="som" aria-label="Som ligado. Tocar para testar.">' + I.sound(16) + ' Som ligado · testar</button>'
+      : '<span class="status status-danger">' + I.sound(16) + ' Som desligado</span>';
     var ch = chamadosAbertos(), nv = pedidosNovos();
     var h = headerBarraca('Pedidos', som) + '<main class="stack g20" style="padding:16px">' + banners();
     if (loading()) h += '<p class="muted">Conectando…</p>';
@@ -633,7 +700,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       }).join('') + '</section>';
     }
     h += '<section class="stack g12"><h2 class="sec-t">Novos pedidos (' + nv.length + ')</h2>';
-    if (!nv.length && !loading()) h += '<div class="banner soft">Nenhum pedido novo. ' + (S.somAtivo ? 'Você será avisado quando chegar um.' : 'Ative o som para ser avisado.') + '</div>';
+    if (!nv.length && !loading()) h += '<div class="banner soft">Nenhum pedido novo. Você será avisado com som e vibração quando chegar um. Deixe o volume do celular alto e esta tela aberta.</div>';
     h += nv.map(function (p) {
       return '<article class="card-strong stack g12"><div class="row between g8"><div class="row g8" style="flex-wrap:wrap">' +
         '<span class="gschip" style="padding:6px 12px;font-size:15px' + (infoGs(p.gs).tipo === 'montado' ? '' : ';background:var(--color-info)') + '">' + esc(nomeGs(p.gs)) + '</span>' +
@@ -643,7 +710,10 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
           return '<div>' + esc(it.qtd) + '× ' + esc(it.nome) + (it.opcao ? ' · ' + esc(it.opcao) : '') + '</div>';
         }).join('') + '</div>' +
         (p.obs ? '<div class="banner soft">Obs.: ' + esc(p.obs) + '</div>' : '') +
-        '<button class="btn btn-primary btn-block" data-a="entregue" data-id="' + esc(p.id) + '">' + I.check() + ' Marcar como entregue</button></article>';
+        (p.recusa ? '<div class="banner soft" style="font-size:13px">Recusado antes: ' + esc(juntar(p.recusa.itens || [])) + '</div>' : '') +
+        (S.recusa && S.recusa.id === p.id ? painelRecusa(p) :
+          '<div class="row g8"><button class="btn btn-primary" style="flex:2" data-a="entregue" data-id="' + esc(p.id) + '">' + I.check() + ' Entregue</button>' +
+          '<button class="btn btn-outline-danger" style="flex:1" data-a="rcAbrir" data-id="' + esc(p.id) + '">Recusar</button></div>') + '</article>';
     }).join('') + '</section>';
     var entregues = S.pedidos.filter(function (p) { return p.status === 'entregue'; }).slice(0, 5);
     if (entregues.length) {
@@ -654,7 +724,37 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     return h + '</main>';
   }
 
+  // Recusa total ou parcial de um pedido novo (acabou, não está gelado, outro motivo)
+  function painelRecusa(p) {
+    var R = S.recusa, itens = p.itens || [];
+    var sel = itens.map(function (it, i) { return !!R.sel[i]; }), nomes = itens.filter(function (it, i) { return sel[i]; }).map(function (it) { return it.nome + (it.opcao ? ' (' + it.opcao + ')' : ''); });
+    var parcial = nomes.length > 0 && nomes.length < itens.length;
+    var h = '<div class="recusa"><div class="stack g8"><span class="lbl" style="margin:0">O que não vai dar para servir?</span>' +
+      itens.map(function (it, i) {
+        return '<button type="button" class="opt' + (sel[i] ? ' on' : '') + '" style="text-align:left;white-space:normal;min-height:48px" aria-pressed="' + sel[i] + '" data-a="rcItem" data-i="' + i + '">' + (sel[i] ? '✕ ' : '') + esc(it.qtd) + '× ' + esc(it.nome) + (it.opcao ? ' · ' + esc(it.opcao) : '') + '</button>';
+      }).join('') + '</div>' +
+      '<div class="stack g8"><span class="lbl" style="margin:0">Motivo</span><div class="row g6" style="flex-wrap:wrap">' + MOTIVOS.map(function (m) {
+        var on = R.motivo === m[0];
+        return '<button type="button" class="opt solid' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="rcMotivo" data-m="' + m[0] + '">' + m[1] + '</button>';
+      }).join('') + '</div></div>' +
+      (R.motivo === 'outro' ? '<div><label class="lbl" for="rc-txt">Recado para o cliente</label><input class="input" id="rc-txt" data-bind="recusa.texto" value="' + esc(R.texto) + '" placeholder="Ex.: a chapa está desligada" maxlength="120"></div>' : '') +
+      (R.motivo === 'acabou' ? '<label class="row g10" style="min-height:44px;font-size:15px"><input type="checkbox" data-bind="recusa.marcar" style="width:24px;height:24px;accent-color:var(--color-secondary-dark)"' + (R.marcar ? ' checked' : '') + '> Marcar "Acabou por hoje" no cardápio</label>' : '');
+    if (nomes.length) h += '<div class="stack g4"><span class="sec-t">O cliente vai ver</span><div class="banner warn" style="color:var(--color-text-primary)">' + esc(msgRecusa(R.motivo, nomes, R.texto, parcial)) + '</div></div>';
+    h += '<div class="row g8"><button class="btn btn-danger" style="flex:2" data-a="rcConfirmar"' + (!nomes.length || S.busy ? ' disabled' : '') + '>' + (parcial ? 'Recusar ' + nomes.length + ' ite' + (nomes.length > 1 ? 'ns' : 'm') : 'Recusar pedido') + '</button>' +
+      '<button class="btn btn-ghost" style="flex:1" data-a="rcCancelar">Voltar</button></div></div>';
+    return h;
+  }
+
   var PRESETS = [[2, 4], [2, 8], [3, 10], [3, 8], [4, 5], [5, 6], [2, 10]];
+  // Tamanho dos botões do mapa para caber na largura da tela, sem arrastar para os lados
+  function tamanhoGs(C, lados) {
+    var vw = Math.min(document.documentElement.clientWidth || window.innerWidth || 390, 480);
+    var util = vw - 32 - 26 - 2; // padding da tela, moldura do mapa e folga
+    var cols = C + lados, gap = cols >= 9 ? 4 : cols >= 7 ? 6 : 10, zgap = lados ? 8 : 12;
+    var s = Math.floor((util - gap * (C - 1) - lados * zgap) / cols);
+    s = Math.max(20, Math.min(48, s));
+    return { s: s, gap: gap, zgap: zgap, f: Math.max(10, Math.min(15, Math.round(s * 0.36))) };
+  }
   function botaoGs(i) {
     var inf = infoGs(i), cls = 'gs ' + statusGs(i) + (inf.tipo === 'avulso' || inf.tipo === 'solto' ? ' av' : '') + (inf.tipo === 'extra' ? ' ex' : '') + (S.mapaSel === i ? ' sel' : '');
     var alerta = inf.tipo === 'solto' || (inf.tipo === 'avulso' && !(inf.ext.descricao || '').trim());
@@ -671,6 +771,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       else if (emUso(k)) soltos.push(k);
     }
     function zona(lista, cls) { return '<div class="' + cls + '">' + lista.map(botaoGs).join('') + '</div>'; }
+    var tam = tamanhoGs(C, (zonas.esquerda.length ? 1 : 0) + (zonas.direita.length ? 1 : 0));
     var det = '';
     if (S.mapaSel) {
       var i2 = S.mapaSel, s = S.sessoes['gs-' + i2], st2 = statusGs(i2), inf2 = infoGs(i2);
@@ -734,11 +835,10 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '<span class="row g6"><span class="sw" style="background:var(--color-danger)"></span>Falta descrição</span></div></div>' +
       '<div class="stack g10" style="border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:12px;background:var(--segment-background)">' +
       '<div style="height:30px;border-radius:var(--radius-sm);background:var(--color-secondary-light);color:var(--segment-text);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.08em">MAR</div>' +
-      (C > 5 ? '<p class="muted" style="font-size:13px;text-align:center">Arraste para os lados para ver todos os guarda-sóis.</p>' : '') +
-      '<div class="mapa-scroll"><div style="display:grid;grid-template-columns:auto auto auto;grid-template-areas:\'. f .\' \'e g d\' \'. a .\';gap:12px;width:max-content;margin:0 auto;align-items:center">' +
+      '<div class="mapa-scroll"><div style="display:grid;grid-template-columns:auto auto auto;grid-template-areas:\'. f .\' \'e g d\' \'. a .\';gap:' + tam.zgap + 'px;width:max-content;margin:0 auto;align-items:center;--gs:' + tam.s + 'px;--gsgap:' + tam.gap + 'px;--gsf:' + tam.f + 'px">' +
       '<div style="grid-area:f">' + zona(zonas.frente, 'zona-row') + '</div>' +
       '<div style="grid-area:e">' + zona(zonas.esquerda, 'zona-col') + '</div>' +
-      '<div style="grid-area:g"><div class="gsgrid" style="grid-template-columns:repeat(' + C + ',48px)">' + grid + '</div></div>' +
+      '<div style="grid-area:g"><div class="gsgrid" style="grid-template-columns:repeat(' + C + ',' + tam.s + 'px)">' + grid + '</div></div>' +
       '<div style="grid-area:d">' + zona(zonas.direita, 'zona-col') + '</div>' +
       '<div style="grid-area:a">' + zona(zonas.atras, 'zona-row') + '</div>' +
       '</div></div>' +
@@ -753,7 +853,8 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var h = headerBarraca('Cardápio', '<button class="btn btn-primary btn-sm" data-a="novoToggle">' + (S.showNovo ? 'Fechar' : I.plus(18) + ' Novo item') + '</button>') +
       '<main class="stack g12" style="padding:14px 16px">' + banners();
     if (S.showNovo) {
-      h += '<form data-form="salvarItem" class="card-strong stack g12"><h2>Novo item</h2>' +
+      h += '<form data-form="salvarItem" class="card-strong stack g12"><h2>' + (S.ni.id ? 'Editar item' : 'Novo item') + '</h2>' +
+        (S.ni.id ? '<p class="muted" style="font-size:13px">A mudança vale para os próximos pedidos. O que já foi pedido continua com o preço de antes.</p>' : '') +
         '<div><label class="lbl" for="ni-nome">Nome</label><input class="input" id="ni-nome" data-bind="ni.nome" value="' + esc(S.ni.nome) + '" placeholder="Ex.: Caipirinha" maxlength="60"></div>' +
         '<div class="row g10"><div style="flex:1"><label class="lbl" for="ni-preco">Preço</label><input class="input" id="ni-preco" inputmode="decimal" data-bind="ni.preco" value="' + esc(S.ni.preco) + '" placeholder="22,00"></div>' +
         '<div style="flex:1"><label class="lbl" for="ni-cat">Categoria</label><input class="input" id="ni-cat" data-bind="ni.cat" value="' + esc(S.ni.cat) + '" placeholder="Drinks" list="cats" maxlength="30"></div></div>' +
@@ -761,7 +862,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         '<div><label class="lbl" for="ni-desc">Descrição (opcional)</label><input class="input" id="ni-desc" data-bind="ni.desc" value="' + esc(S.ni.desc) + '" placeholder="Ex.: bem gelada" maxlength="80"></div>' +
         '<div><label class="lbl" for="ni-op">Opções para escolher (opcional)</label><input class="input" id="ni-op" data-bind="ni.opcoes" value="' + esc(S.ni.opcoes) + '" placeholder="Limão, Maracujá, Morango" maxlength="120"></div>' +
         '<label class="row g10" style="min-height:44px;font-size:15px"><input type="checkbox" data-bind="ni.destaque" style="width:24px;height:24px;accent-color:var(--color-secondary-dark)"' + (S.ni.destaque ? ' checked' : '') + '> Mostrar em Destaques</label>' +
-        '<button class="btn btn-primary btn-lg btn-block" type="submit"' + (S.busy ? ' disabled' : '') + '>Salvar item</button></form>';
+        '<div class="row g8"><button class="btn btn-primary btn-lg" style="flex:2" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (S.ni.id ? 'Salvar alterações' : 'Salvar item') + '</button><button class="btn btn-ghost btn-lg" style="flex:1" type="button" data-a="novoToggle">Cancelar</button></div></form>';
     } else h += '<div class="banner soft">Acabou alguma coisa? Toque em <strong>Disponível</strong> e o item aparece como indisponível no celular do cliente na hora.</div>';
     if (S.okCard && !S.cardapio.length) h += '<div class="card stack g10"><p>O cardápio está vazio. Cadastre seus itens em <strong>Novo item</strong> ou comece com um cardápio de exemplo.</p><button class="btn btn-secondary btn-block" data-a="seed"' + (S.busy ? ' disabled' : '') + '>Carregar cardápio de exemplo</button></div>';
     h += S.cardapio.map(function (i) {
@@ -771,6 +872,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         '<div class="stack" style="flex:1;min-width:0;gap:2px"><div style="font-weight:600;font-size:15px">' + esc(i.nome) + '</div>' +
         '<div class="muted" style="font-size:12px">' + esc(i.cat || 'Outros') + (i.destaque ? ' · destaque' : '') + (i.opcoes && i.opcoes.length ? ' · ' + i.opcoes.length + ' opções' : '') + '</div>' +
         '<div class="row g10"><strong class="num" style="font-size:14px">' + brl(i.preco) + '</strong>' +
+        '<button class="linkbtn" style="font-size:13px;min-height:32px" data-a="editItem" data-id="' + esc(i.id) + '">Editar</button>' +
         '<button class="linkbtn" style="font-size:13px;min-height:32px;color:' + (del ? 'var(--color-danger)' : 'var(--color-text-secondary)') + '" data-a="del" data-id="' + esc(i.id) + '">' + (del ? 'Confirmar remoção' : 'Remover') + '</button></div></div>' +
         '<button class="toggle' + (i.acabou ? ' off' : '') + '" data-a="acabou" data-id="' + esc(i.id) + '" aria-pressed="' + (!i.acabou) + '">' + (i.acabou ? 'Indisponível' : 'Disponível') + '</button></div>';
     }).join('');
@@ -781,23 +883,28 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
 
   function tabRelatorio() {
     var ini = inicioPeriodo(S.relPeriodo);
-    var ps = S.pedidos.filter(function (p) { return (p.criadoEm || 0) >= ini; });
+    // Venda só conta quando o dono confirma o pagamento no fechamento (parcial ou total)
     var fs = S.fechamentos.filter(function (f) { return (f.em || 0) >= ini; });
-    var vendas = somaPedidos(ps);
-    var recebido = fs.reduce(function (t, f) { return t + (Number(f.total) || 0); }, 0);
+    var ps = S.pedidos.filter(function (p) { return (p.criadoEm || 0) >= ini; });
+    var vendas = fs.reduce(function (t, f) { return t + (Number(f.total) || 0); }, 0);
     var contas = {}; fs.forEach(function (f) { if (f.tipo !== 'parcial') contas[f.sid || f.id] = true; });
     var porConta = {}; fs.forEach(function (f) { var k = f.sid || f.id; if (contas[k]) porConta[k] = (porConta[k] || 0) + (Number(f.total) || 0); });
     var nContas = Object.keys(contas).length;
     var media = nContas ? Object.keys(porConta).reduce(function (t, k) { return t + porConta[k]; }, 0) / nContas : null;
     var parciais = fs.filter(function (f) { return f.tipo === 'parcial'; }).length;
-    var qtd = {};
-    ps.forEach(function (p) { (p.itens || []).forEach(function (it) { qtd[it.nome] = (qtd[it.nome] || 0) + (Number(it.qtd) || 0); }); });
+    var qtd = {}, nItens = 0;
+    fs.forEach(function (f) { (f.itens || []).forEach(function (it) { var q = Number(it.qtd) || 0; qtd[it.nome] = (qtd[it.nome] || 0) + q; nItens += q; }); });
     var top = Object.keys(qtd).map(function (k) { return [k, qtd[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5);
     var max = top.length ? top[0][1] : 1;
     var horas = {}, pico = null;
     ps.forEach(function (p) { var h = new Date(p.criadoEm).getHours(); horas[h] = (horas[h] || 0) + 1; });
     Object.keys(horas).forEach(function (h) { if (pico === null || horas[h] > horas[pico]) pico = h; });
     var pg = {}; fs.forEach(function (f) { var k = f.pagamento || 'Outro'; pg[k] = (pg[k] || 0) + (Number(f.total) || 0); });
+    var abertoPs = S.pedidos.filter(function (p) { var x = S.sessoes['gs-' + p.gs]; return !p.pago && x && x.aberta && x.sid === p.sid; });
+    var emAberto = somaPedidos(abertoPs), contasAbertas = {}; abertoPs.forEach(function (p) { contasAbertas[p.sid] = true; });
+    var nAbertas = Object.keys(contasAbertas).length;
+    var recusados = S.todosPedidos.filter(function (p) { return p.recusa && (p.recusa.em || 0) >= ini; }).length;
+    var cancelados = S.todosPedidos.filter(function (p) { return p.status === 'cancelado' && !p.recusa && (p.canceladoEm || 0) >= ini; }).length;
     var hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
     function tile(rot, val, sub) {
       return '<div class="card stack g4" style="padding:14px"><span class="muted" style="font-size:13px">' + rot + '</span>' +
@@ -812,9 +919,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     if (!S.okPed || !S.okFech) return h + '<p class="muted">Carregando…</p></main>';
     if (!ps.length && !fs.length) return h + '<div class="banner soft">Ainda não há pedidos neste período. Os números aparecem aqui assim que os clientes começarem a pedir.</div></main>';
     h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">' +
-      tile('Vendas', brl(vendas), 'soma dos pedidos feitos') + tile('Pedidos', ps.length, '') +
-      tile('Contas fechadas', nContas, brl(recebido) + ' recebidos' + (parciais ? ' · ' + parciais + ' parcia' + (parciais > 1 ? 'is' : 'l') : '')) +
-      tile('Média por conta', media === null ? '—' : brl(media), '') + '</div>';
+      tile('Vendas', brl(vendas), 'pagamentos confirmados') + tile('Contas fechadas', nContas, parciais ? parciais + ' pagamento' + (parciais > 1 ? 's' : '') + ' parcia' + (parciais > 1 ? 'is' : 'l') : '') +
+      tile('Média por conta', media === null ? '—' : brl(media), '') + tile('Itens vendidos', nItens, ps.length + (ps.length === 1 ? ' pedido feito' : ' pedidos feitos')) + '</div>';
+    if (nAbertas) h += '<div class="banner info">Em aberto agora: <strong class="num">' + brl(emAberto) + '</strong> em ' + nAbertas + ' conta' + (nAbertas > 1 ? 's' : '') + '. Entra nas vendas quando o pagamento for confirmado no fechamento.</div>';
     if (top.length) h += '<section class="stack g12"><h2>Mais vendidos</h2>' + top.map(function (t) {
       return '<div class="stack g6"><div class="line" style="font-size:14px"><span>' + esc(t[0]) + '</span><strong class="v">' + t[1] + '</strong></div>' +
         '<div aria-hidden="true" style="height:10px;border-radius:999px;background:var(--color-surface-active)"><div style="width:' + Math.max(4, Math.round(t[1] / max * 100)) + '%;height:10px;border-radius:999px;background:var(--color-secondary-dark)"></div></div></div>';
@@ -822,7 +929,8 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     if (Object.keys(pg).length) h += '<section class="card stack g10"><h2 style="font-size:17px">Como os clientes pagaram</h2>' + Object.keys(pg).map(function (k) {
       return '<div class="line"><span>' + esc(k) + '</span><strong class="v">' + brl(pg[k]) + '</strong></div>';
     }).join('') + '</section>';
-    if (pico !== null) h += '<div class="row between g12" style="background:var(--color-background-soft);border-radius:var(--radius-md);padding:14px 16px"><span class="muted row g6">' + I.clock(18) + ' Horário de pico</span><strong class="num">' + pico + 'h – ' + (Number(pico) + 1) + 'h</strong></div>';
+    if (pico !== null) h += '<div class="row between g12" style="background:var(--color-background-soft);border-radius:var(--radius-md);padding:14px 16px"><span class="muted row g6">' + I.clock(18) + ' Horário de pico de pedidos</span><strong class="num">' + pico + 'h – ' + (Number(pico) + 1) + 'h</strong></div>';
+    if (recusados || cancelados) h += '<p class="muted" style="font-size:13px">' + [recusados ? recusados + ' pedido' + (recusados > 1 ? 's' : '') + ' com recusa' : '', cancelados ? cancelados + ' cancelado' + (cancelados > 1 ? 's' : '') + ' no fechamento' : ''].filter(Boolean).join(' · ') + '. Não entram nas vendas.</p>';
     return h + '</main>';
   }
 
@@ -841,6 +949,40 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '<p class="muted" style="font-size:14px">São ' + POOL + ' plaquinhas fixas, que nunca mudam. As de 01 a ' + pad2(N()) + ' vão nos guarda-sóis do formato. As demais servem para avulsos e guarda-sóis extras, seguindo a sequência.</p>' +
       '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">' + cards + '</div>' +
       '<a href="#" class="btn btn-ghost btn-block">Tela inicial do teste</a></main>';
+  }
+
+  function qtdsDraft(p) { return S.draft[p.id] || (p.itens || []).map(function (it) { return Number(it.qtd) || 0; }); }
+  function secaoEditar(ps) {
+    var abertos = ps.filter(function (p) { return !p.pago; }).sort(function (a, b) { return (a.criadoEm || 0) - (b.criadoEm || 0); });
+    if (!abertos.length) return '';
+    if (!S.editConta) return '<button class="btn btn-ghost btn-block" data-a="editAbrir">Editar ou cancelar pedidos (PIN)</button>';
+    var h = '<section class="card-strong stack g12">';
+    if (!pinValido()) {
+      var criar = !S.config.pinHash;
+      return h + '<form data-form="pinEntrar" class="stack g12"><h2 style="font-size:18px">' + (criar ? 'Crie o PIN do dono' : 'PIN do dono') + '</h2>' +
+        '<p class="muted" style="font-size:14px">' + (criar ? 'Escolha de 4 a 6 números. Ele será pedido sempre que alguém for editar ou cancelar um pedido.' : 'Para editar ou cancelar pedidos desta conta.') + '</p>' +
+        '<div><label class="lbl" for="pin1">' + (criar ? 'Novo PIN' : 'PIN') + '</label><input class="input" id="pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn" value="' + esc(S.pinIn) + '"></div>' +
+        (criar ? '<div><label class="lbl" for="pin2">Repita o PIN</label><input class="input" id="pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn2" value="' + esc(S.pinIn2) + '"></div>' : '') +
+        '<div class="row g8"><button class="btn btn-primary" style="flex:2" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (criar ? 'Criar PIN' : 'Liberar edição') + '</button><button class="btn btn-ghost" style="flex:1" type="button" data-a="editSair">Cancelar</button></div></form></section>';
+    }
+    h += '<div class="row between g8"><h2 style="font-size:18px">Editar pedidos em aberto</h2><button class="linkbtn" data-a="editSair">Concluir</button></div>' +
+      '<p class="muted" style="font-size:13px">Use − e + para mudar quantidades e toque em Salvar. Pedidos já pagos não aparecem aqui.</p>';
+    h += abertos.map(function (p) {
+      var q = qtdsDraft(p), orig = (p.itens || []).map(function (it) { return Number(it.qtd) || 0; });
+      var mudou = q.some(function (x, i) { return x !== orig[i]; });
+      var total = (p.itens || []).reduce(function (t, it, i) { return t + q[i] * (Number(it.preco) || 0); }, 0);
+      var conf = S.confirmCancel === p.id;
+      return '<div class="edped"><div class="row between g8"><strong style="font-size:15px">' + esc(p.quem || p.nome) + '</strong><span class="muted num" style="font-size:12px">' + codigo(p.id) + ' · ' + hora(p.criadoEm) + (p.status === 'entregue' ? ' · entregue' : ' · a entregar') + '</span></div>' +
+        (p.itens || []).map(function (it, i) {
+          return '<div class="edlin' + (q[i] === 0 ? ' zero' : '') + '"><span class="nm">' + esc(it.nome) + (it.opcao ? ' · ' + esc(it.opcao) : '') + '<br><span class="muted num" style="font-size:13px">' + brl(it.preco) + ' cada</span></span>' +
+            '<div class="stepper"><button class="sbtn" data-a="edQtd" data-id="' + esc(p.id) + '" data-i="' + i + '" data-d="-1" aria-label="Menos ' + esc(it.nome) + '"' + (q[i] === 0 ? ' disabled' : '') + '>' + I.minus() + '</button><span class="qtd">' + q[i] + '</span>' +
+            '<button class="sbtn" data-a="edQtd" data-id="' + esc(p.id) + '" data-i="' + i + '" data-d="1" aria-label="Mais ' + esc(it.nome) + '">' + I.plus(18) + '</button></div></div>';
+        }).join('') +
+        '<div class="line"><span class="muted">Total do pedido</span><strong class="v">' + brl(total) + '</strong></div>' +
+        (mudou ? '<div class="row g8"><button class="btn btn-primary btn-sm" style="flex:2" data-a="edSalvar" data-id="' + esc(p.id) + '"' + (S.busy ? ' disabled' : '') + '>' + (total > 0 ? 'Salvar alterações' : 'Salvar (cancela o pedido)') + '</button><button class="btn btn-ghost btn-sm" style="flex:1" data-a="edDesfazer" data-id="' + esc(p.id) + '">Desfazer</button></div>' : '') +
+        '<button class="btn btn-sm ' + (conf ? 'btn-danger' : 'btn-outline-danger') + '" data-a="edCancelar" data-id="' + esc(p.id) + '"' + (S.busy ? ' disabled' : '') + '>' + (conf ? 'Confirmar: cancelar pedido inteiro' : 'Cancelar pedido inteiro') + '</button></div>';
+    }).join('');
+    return h + '</section>';
   }
 
   function viewFechar() {
@@ -864,7 +1006,8 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">' + formas.map(function (f) {
         return '<button class="opt solid' + (S.pagamento === f ? ' on' : '') + '" style="min-height:48px;font-size:15px" aria-pressed="' + (S.pagamento === f) + '" data-a="pagamento" data-f="' + f + '">' + f + '</button>';
       }).join('') + '</div></fieldset>' +
-      '<p class="sec-t">Quem pediu o quê</p>' + grupos.map(function (g) { return pessoaCard(g, false, grupos.length > 1); }).join('');
+      '<p class="sec-t">Quem pediu o quê</p>' + grupos.map(function (g) { return pessoaCard(g, false, grupos.length > 1); }).join('') +
+      secaoEditar(ps);
     if (hist.length) {
       h += '<section class="card stack g8"><h2 style="font-size:17px">Pagamentos desta conta</h2>' + hist.map(function (f) {
         return '<div class="line" style="font-size:14px"><span>' + hora(f.em) + ' · ' + esc(f.quem || '') + ' · ' + (f.tipo === 'parcial' ? 'parcial' : 'restante') + ' · ' + esc(f.pagamento || '') + '</span><span class="v">' + brl(f.total) + '</span></div>';
@@ -949,7 +1092,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         if (!S.cart.length || S.busy) return;
         n = S.route.gs; s = S.sessoes['gs-' + n];
         if (!s || !s.aberta || s.sid !== S.sid) { toast('Esta conta foi fechada.'); render(); return; }
-        var itens = S.cart.map(function (c) { return { nome: c.nome, opcao: c.opcao || '', qtd: c.qtd, preco: c.preco }; });
+        var itens = S.cart.map(function (c) { return { id: c.id, nome: c.nome, opcao: c.opcao || '', qtd: c.qtd, preco: c.preco }; });
         var total = itens.reduce(function (t, x) { return t + x.qtd * x.preco; }, 0);
         var ref = S.db.collection('pedidos').doc();
         S.busy = true; render();
@@ -983,15 +1126,92 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         return;
       }
       // barraca
-      case 'tab': S.tab = d.t; S.mapaSel = null; S.confirmDel = null; S.fmt = null; S.extForm = null; S.confirmExt = null; S.top = true; render(); return;
-      case 'som': ativarSom(); return;
+      case 'tab': S.tab = d.t; S.mapaSel = null; S.confirmDel = null; S.fmt = null; S.extForm = null; S.confirmExt = null; S.recusa = null; S.showNovo = false; S.top = true; render(); return;
+      case 'som': destravarSom(true); manterTelaAcesa(); return;
       case 'atender': w(function () { return gsRef(d.gs).update({ chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null }); }); return;
       case 'entregue': w(function () { return S.db.doc('pedidos/' + d.id).update({ status: 'entregue', entregueEm: Date.now() }); }); return;
+      case 'rcAbrir': {
+        var rp = S.pedidos.filter(function (x) { return x.id === d.id; })[0]; if (!rp) return;
+        var sel0 = {}; if ((rp.itens || []).length === 1) sel0[0] = true;
+        S.recusa = { id: d.id, sel: sel0, motivo: 'acabou', texto: '', marcar: true }; render(); return;
+      }
+      case 'rcItem': S.recusa.sel[d.i] = !S.recusa.sel[d.i]; render(); return;
+      case 'rcMotivo': S.recusa.motivo = d.m; render(); return;
+      case 'rcCancelar': S.recusa = null; render(); return;
+      case 'rcConfirmar': {
+        var R = S.recusa, pr = R && S.pedidos.filter(function (x) { return x.id === R.id; })[0];
+        if (!pr || S.busy) return;
+        var its = pr.itens || [], fora = its.filter(function (it, i) { return R.sel[i]; }), fica = its.filter(function (it, i) { return !R.sel[i]; });
+        if (!fora.length) { toast('Escolha o que não vai dar para servir.'); return; }
+        if (R.motivo === 'outro' && !(R.texto || '').trim()) { toast('Escreva um recado curto para o cliente.'); return; }
+        var nomesF = fora.map(function (it) { return it.nome + (it.opcao ? ' (' + it.opcao + ')' : ''); });
+        var agoraR = Date.now(), parcialR = fica.length > 0;
+        var rec = { itens: nomesF, motivo: R.motivo, msg: msgRecusa(R.motivo, nomesF, R.texto, parcialR), em: agoraR };
+        var upd = { recusa: rec, itensOriginais: pr.itensOriginais || its };
+        if (parcialR) { upd.itens = fica; upd.total = fica.reduce(function (t, it) { return t + (Number(it.qtd) || 0) * (Number(it.preco) || 0); }, 0); }
+        else { upd.status = 'cancelado'; upd.canceladoEm = agoraR; upd.itens = []; upd.total = 0; }
+        var marcarIds = [];
+        if (R.motivo === 'acabou' && R.marcar) fora.forEach(function (it) {
+          var c = S.cardapio.filter(function (x) { return it.id ? x.id === it.id : x.nome === it.nome; })[0];
+          if (c && !c.acabou && marcarIds.indexOf(c.id) < 0) marcarIds.push(c.id);
+        });
+        S.busy = true; render();
+        w(function () {
+          return S.db.doc('pedidos/' + pr.id).update(upd)
+            .then(function () { return emSerie(marcarIds, function (id) { return S.db.doc('cardapio/' + id).update({ acabou: true }); }); });
+        }).then(function (ok) { S.busy = false; if (ok) { S.recusa = null; toast(parcialR ? 'Itens recusados. O cliente foi avisado.' : 'Pedido recusado. O cliente foi avisado.'); } render(); });
+        return;
+      }
+      case 'rcOk': LS.set(d.k, '1'); render(); return;
+      case 'editAbrir': S.editConta = true; S.pinIn = ''; S.pinIn2 = ''; render(); return;
+      case 'editSair': S.editConta = false; S.draft = {}; S.confirmCancel = null; S.pinIn = ''; S.pinIn2 = ''; render(); return;
+      case 'pinEntrar': {
+        var p1 = (S.pinIn || '').trim();
+        if (!/^\d{4,6}$/.test(p1)) { toast('O PIN tem de 4 a 6 números.'); return; }
+        if (!S.config.pinHash) {
+          if (p1 !== (S.pinIn2 || '').trim()) { toast('Os dois PINs não são iguais.'); return; }
+          S.busy = true; render();
+          w(function () { return S.db.doc('config/barraca').set({ pinHash: hashPin(p1) }, { merge: true }); })
+            .then(function (ok) { S.busy = false; if (ok) { S.pinOkAte = Date.now() + 10 * 60000; S.pinIn = ''; S.pinIn2 = ''; toast('PIN criado. Guarde bem esse número.'); } render(); });
+          return;
+        }
+        if (hashPin(p1) !== S.config.pinHash) { S.pinIn = ''; toast('PIN incorreto.'); render(); return; }
+        S.pinOkAte = Date.now() + 10 * 60000; S.pinIn = ''; render(); return;
+      }
+      case 'edQtd': {
+        if (!pinValido()) { toast('Digite o PIN de novo.'); render(); return; }
+        var pe = S.pedidos.filter(function (x) { return x.id === d.id; })[0]; if (!pe) return;
+        var qq = qtdsDraft(pe).slice(); qq[+d.i] = Math.max(0, qq[+d.i] + (+d.d)); S.draft[pe.id] = qq; S.confirmCancel = null; render(); return;
+      }
+      case 'edDesfazer': delete S.draft[d.id]; render(); return;
+      case 'edSalvar': {
+        if (!pinValido()) { toast('Digite o PIN de novo.'); render(); return; }
+        var ps2 = S.pedidos.filter(function (x) { return x.id === d.id; })[0]; if (!ps2 || S.busy || ps2.pago) return;
+        var q2 = qtdsDraft(ps2), novos = [];
+        (ps2.itens || []).forEach(function (it, i) { if (q2[i] > 0) novos.push(Object.assign({}, it, { qtd: q2[i] })); });
+        var agoraE = Date.now(), base = { itensOriginais: ps2.itensOriginais || ps2.itens, editadoEm: agoraE };
+        var upE = novos.length ? Object.assign(base, { itens: novos, total: novos.reduce(function (t, it) { return t + it.qtd * (Number(it.preco) || 0); }, 0) })
+          : Object.assign(base, { status: 'cancelado', canceladoEm: agoraE, motivoCancel: 'Cancelado no fechamento', itens: [], total: 0 });
+        S.busy = true; render();
+        w(function () { return S.db.doc('pedidos/' + ps2.id).update(upE); })
+          .then(function (ok) { S.busy = false; if (ok) { delete S.draft[ps2.id]; toast(novos.length ? 'Pedido ' + codigo(ps2.id) + ' alterado.' : 'Pedido ' + codigo(ps2.id) + ' cancelado.'); } render(); });
+        return;
+      }
+      case 'edCancelar': {
+        if (!pinValido()) { toast('Digite o PIN de novo.'); render(); return; }
+        if (S.confirmCancel !== d.id) { S.confirmCancel = d.id; render(); return; }
+        var pc = S.pedidos.filter(function (x) { return x.id === d.id; })[0]; if (!pc || S.busy || pc.pago) return;
+        var agoraC = Date.now();
+        S.busy = true; S.confirmCancel = null; render();
+        w(function () { return S.db.doc('pedidos/' + pc.id).update({ status: 'cancelado', canceladoEm: agoraC, motivoCancel: 'Cancelado no fechamento', itensOriginais: pc.itensOriginais || pc.itens, itens: [], total: 0 }); })
+          .then(function (ok) { S.busy = false; if (ok) { delete S.draft[pc.id]; toast('Pedido ' + codigo(pc.id) + ' cancelado.'); } render(); });
+        return;
+      }
       case 'abrirFechar': {
         var ss = S.sessoes['gs-' + d.gs];
-        S.fecharGs = +d.gs; S.fecharFoco = ss && ss.chamado === 'parcial' ? ss.chamadoPid : null; S.pagamento = 'Pix'; S.top = true; render(); return;
+        S.fecharGs = +d.gs; S.fecharFoco = ss && ss.chamado === 'parcial' ? ss.chamadoPid : null; S.pagamento = 'Pix'; S.editConta = false; S.draft = {}; S.confirmCancel = null; S.top = true; render(); return;
       }
-      case 'voltarFechar': S.fecharGs = null; S.top = true; render(); return;
+      case 'voltarFechar': S.fecharGs = null; S.editConta = false; S.draft = {}; S.confirmCancel = null; S.pinOkAte = 0; S.top = true; render(); return;
       case 'pagamento': S.pagamento = d.f; render(); return;
       case 'pagarParte': {
         n = S.fecharGs; s = S.sessoes['gs-' + n]; if (!s || S.busy) return;
@@ -1059,26 +1279,33 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         var conflito = Object.keys(S.extras).map(Number).filter(function (x) { return x <= nf.l * nf.c; });
         if (conflito.length) { toast('As plaquinhas ' + conflito.map(pad2).join(', ') + ' estão em uso como avulso/extra. Tire-as do mapa antes de aumentar o formato.'); return; }
         S.busy = true; render();
-        w(function () { return S.db.doc('config/barraca').set({ nome: S.config.nome, linhas: nf.l, colunas: nf.c, guardasois: nf.l * nf.c }); })
+        w(function () { return S.db.doc('config/barraca').set({ nome: S.config.nome, linhas: nf.l, colunas: nf.c, guardasois: nf.l * nf.c }, { merge: true }); })
           .then(function (ok) { S.busy = false; if (ok) { S.fmt = null; toast('Formato salvo: ' + nf.l + ' × ' + nf.c + ' = ' + nf.l * nf.c + ' guarda-sóis.'); } render(); });
         return;
       }
       case 'salvarNome': {
         var nm = (S.cfgNome == null ? S.config.nome : S.cfgNome).trim(); if (!nm) { toast('Digite o nome da barraca.'); return; }
         var cfg = { nome: nm, linhas: S.config.linhas, colunas: S.config.colunas, guardasois: N() };
-        w(function () { return S.db.doc('config/barraca').set(cfg); }).then(function (ok) { if (ok) { S.cfgNome = null; toast('Nome salvo.'); render(); } });
+        w(function () { return S.db.doc('config/barraca').set(cfg, { merge: true }); }).then(function (ok) { if (ok) { S.cfgNome = null; toast('Nome salvo.'); render(); } });
         return;
       }
-      case 'novoToggle': S.showNovo = !S.showNovo; render(); return;
+      case 'novoToggle': S.showNovo = !S.showNovo; S.ni = { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false }; render(); return;
+      case 'editItem': {
+        var ei = S.cardapio.filter(function (x) { return x.id === d.id; })[0]; if (!ei) return;
+        S.ni = { id: ei.id, nome: ei.nome || '', preco: (Number(ei.preco) || 0).toFixed(2).replace('.', ','), cat: ei.cat || '', desc: ei.desc || '', opcoes: (ei.opcoes || []).join(', '), destaque: !!ei.destaque };
+        S.showNovo = true; S.confirmDel = null; S.top = true; render(); return;
+      }
       case 'salvarItem': {
         var ni = S.ni, nomeI = (ni.nome || '').trim(), preco = parsePreco(ni.preco);
         if (!nomeI) { toast('Digite o nome do item.'); return; }
         if (!(preco >= 0)) { toast('Digite um preço válido, ex.: 22,00'); return; }
         var opcoes = (ni.opcoes || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
-        var doc = { nome: nomeI, preco: preco, cat: (ni.cat || '').trim() || 'Outros', desc: (ni.desc || '').trim(), opcoes: opcoes, destaque: !!ni.destaque, acabou: false, ordem: Date.now() };
+        var doc = { nome: nomeI, preco: preco, cat: (ni.cat || '').trim() || 'Outros', desc: (ni.desc || '').trim(), opcoes: opcoes, destaque: !!ni.destaque };
+        var editId = ni.id;
+        if (!editId) { doc.acabou = false; doc.ordem = Date.now(); }
         S.busy = true; render();
-        w(function () { return S.db.collection('cardapio').add(doc); })
-          .then(function (ok) { S.busy = false; if (ok) { S.ni = { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false }; S.showNovo = false; toast('Item salvo.'); } render(); });
+        w(function () { return editId ? S.db.doc('cardapio/' + editId).update(doc) : S.db.collection('cardapio').add(doc); })
+          .then(function (ok) { S.busy = false; if (ok) { S.ni = { nome: '', preco: '', cat: '', desc: '', opcoes: '', destaque: false }; S.showNovo = false; toast(editId ? 'Item atualizado.' : 'Item salvo.'); } render(); });
         return;
       }
       case 'seed': {
@@ -1124,6 +1351,8 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.modal) { S.modal = null; render(); } });
   window.addEventListener('hashchange', function () { applyRoute(); render(); });
   setInterval(function () { if (S.route.v === 'barraca' && !isTyping()) render(); }, 30000);
+  var rsT = null;
+  window.addEventListener('resize', function () { clearTimeout(rsT); rsT = setTimeout(function () { if (S.route.v === 'barraca' && S.tab === 'mapa' && !isTyping()) render(); }, 200); });
 
   // ---------- Conexão ----------
   function checkLoaded() { if (!loading()) { clearTimeout(slowTimer); S.slow = false; } }
@@ -1154,7 +1383,14 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     }, function () { S.okFech = true; render(); });
     db.collection('pedidos').orderBy('criadoEm', 'desc').limit(1000).onSnapshot(function (snap) {
       if (S.okPed && S.route.v === 'barraca' && snap.docChanges().some(function (c) { return c.type === 'added' && c.doc.data().status === 'novo'; })) beep();
-      S.pedidos = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      S.todosPedidos = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      // cancelados e recusados por inteiro não entram em conta, mapa nem relatório
+      S.pedidos = S.todosPedidos.filter(function (p) { return p.status !== 'cancelado'; });
+      if (S.route.v === 'cliente') {
+        var ks = avisosRecusa().map(chaveRecusa), novo = S.rcVistos && ks.some(function (k) { return S.rcVistos.indexOf(k) < 0; });
+        S.rcVistos = ks;
+        if (novo) { try { if (navigator.vibrate) navigator.vibrate([300, 120, 300]); } catch (e) {} toast('A barraca deixou um recado sobre o seu pedido.'); }
+      }
       S.okPed = true; checkLoaded(); render();
     }, onErr);
     db.doc('config/barraca').onSnapshot(function (d) {
@@ -1162,7 +1398,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         var x = d.data(), L = x.linhas, C = x.colunas;
         if (!L || !C) { var tot = Math.max(1, Math.min(MAX_GS, x.guardasois || 12)); C = Math.min(tot, 4); L = Math.ceil(tot / C); }
         while (L * C > MAX_GS) L--;
-        S.config = { nome: x.nome || 'Barraca', linhas: L, colunas: C };
+        S.config = { nome: x.nome || 'Barraca', linhas: L, colunas: C, pinHash: x.pinHash || null };
       }
       S.okCfg = true; checkLoaded(); render();
     }, onErr);
