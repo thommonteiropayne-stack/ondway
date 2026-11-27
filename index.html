@@ -92,6 +92,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
 .nav .dot{position:absolute;top:2px;left:calc(50% + 6px);min-width:20px;height:20px;border-radius:999px;background:var(--color-danger);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .space-nav{height:110px}
 .space-bar{height:110px}
+.nav.nav4 .inner{grid-template-columns:repeat(4,minmax(0,1fr))}
+.bottom.acima{bottom:70px;padding:10px 16px;box-shadow:none}
+.space-bar2{height:180px}
 .mapa-scroll{overflow-x:auto;padding:4px 2px 8px}
 .gsgrid{display:grid;gap:var(--gsgap,10px);width:max-content;margin:0 auto}
 .gs{width:var(--gs,48px);height:var(--gs,48px);padding:0;border-radius:999px;border:2px solid var(--color-border-strong);background:var(--color-surface);color:var(--color-text-secondary);font:700 var(--gsf,15px) var(--font-body);cursor:pointer;font-variant-numeric:tabular-nums}
@@ -282,8 +285,30 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     confirmDel: null, cfgNome: null, fmt: null, relPeriodo: 'hoje',
     extras: {}, extForm: null, confirmExt: null,
     todosPedidos: [], recusa: null, rcVistos: null,
-    editConta: false, pinOkAte: 0, pinIn: '', pinIn2: '', draft: {}, confirmCancel: null
+    editConta: false, pinOkAte: 0, pinIn: '', pinIn2: '', draft: {}, confirmCancel: null,
+    descPct: 0, descEdit: false, descIn: '', liberar: false, pinTroca: false, pinAtual: '', pinNovo: '', pinNovo2: ''
   };
+  // Formulário de PIN reaproveitado (editar pedidos, desconto). Cria o PIN se ainda não existe.
+  function formPin(cancelar, motivo) {
+    var criar = !S.config.pinHash;
+    return '<form data-form="pinEntrar" class="stack g12"><h2 style="font-size:18px">' + (criar ? 'Crie o PIN do dono' : 'PIN do dono') + '</h2>' +
+      '<p class="muted" style="font-size:14px">' + (criar ? 'Escolha de 4 a 6 números. Ele será pedido para editar ou cancelar pedidos, dar desconto e liberar o celular de um cliente.' : motivo) + '</p>' +
+      '<div><label class="lbl" for="pin1">' + (criar ? 'Novo PIN' : 'PIN') + '</label><input class="input" id="pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn" value="' + esc(S.pinIn) + '"></div>' +
+      (criar ? '<div><label class="lbl" for="pin2">Repita o PIN</label><input class="input" id="pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn2" value="' + esc(S.pinIn2) + '"></div>' : '') +
+      '<div class="row g8"><button class="btn btn-primary" style="flex:2" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (criar ? 'Criar PIN' : 'Liberar') + '</button><button class="btn btn-ghost" style="flex:1" type="button" data-a="' + cancelar + '">Cancelar</button></div></form>';
+  }
+  function comDesconto(v) { return Math.round((Number(v) || 0) * (100 - S.descPct)) / 100; }
+  // Bloqueio do celular do cliente depois que a conta dele é fechada (vale por 12 horas)
+  var BLOQUEIO_MS = 12 * 3600000;
+  function sidEmKey(n) { return 'ondway-' + BARRACA + '-sidem-gs-' + n; }
+  function bloqueio(n, sess) {
+    var em = +LS.get(sidEmKey(n)) || 0;
+    if (!S.sid || !em || Date.now() - em > BLOQUEIO_MS) return null;
+    if (!sess || sess.sid !== S.sid || !sess.aberta) return 'total';
+    var pp = sess.participantes && sess.participantes[S.pid];
+    if (pp && pp.fechadoEm) return 'parcial';
+    return null;
+  }
   // PIN do dono: guardado só como código embaralhado. Não é segurança forte (o banco ainda
   // está em modo de teste), mas evita que garçom ou cliente edite pedido por engano.
   function hashPin(p) {
@@ -450,8 +475,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var n = S.route.gs, sess = S.sessoes['gs-' + n];
     if (!S.okSess) return '<div class="wrap pad stack g16">' + logo(24) + banners() + '<p class="muted">Carregando…</p></div>';
     if (n < 1 || n > POOL) return '<div class="wrap pad stack g16">' + logo(24) + '<div class="banner warn">Este guarda-sol não existe no mapa da barraca. Procure a equipe.</div></div>';
+    var bl = bloqueio(n, sess);
+    if (bl) return viewEncerrada(n, bl);
     var joined = S.sid && sess && sess.sid === S.sid;
-    if (joined && !sess.aberta) return viewEncerrada(n);
     if (!joined || !sess.aberta) return viewBoasVindas(n, sess);
     if (S.cview === 'carrinho') return viewCarrinho(n, sess);
     if (S.cview === 'conta') return viewConta(n, sess);
@@ -472,21 +498,35 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '</form>' + rodape() + '</div>';
   }
 
-  function viewEncerrada(n) {
-    return '<div class="wrap pad stack g20" style="padding-top:32px">' + logo(26) +
+  function viewEncerrada(n, tipo) {
+    var h = '<div class="wrap pad stack g20" style="padding-top:32px">' + logo(26) + banners() +
       '<div class="stack g12"><span style="color:var(--color-success)">' + I.check(40) + '</span>' +
-      '<h1>Conta fechada</h1><p class="muted">Obrigado pela visita à ' + esc(S.config.nome) + '. Volte sempre!</p></div>' +
-      '<button class="btn btn-secondary btn-lg btn-block" data-a="novaConta">Começar uma nova conta</button></div>';
+      '<h1>' + (tipo === 'parcial' ? 'Sua parte foi paga' : 'Conta fechada') + '</h1><p class="muted">Obrigado pela visita à ' + esc(S.config.nome) + '. Volte sempre!</p></div>' +
+      '<div class="banner soft">Os pedidos por este celular foram encerrados. Se quiser pedir de novo, chame o garçom para liberar.</div>';
+    if (!S.config.pinHash) return h + '<button class="btn btn-secondary btn-lg btn-block" data-a="novaConta">Começar uma nova conta</button></div>';
+    if (!S.liberar) return h + '<button class="btn btn-ghost btn-block" data-a="liberarAbrir">Liberar este celular (garçom)</button></div>';
+    return h + '<form data-form="pinLiberar" class="card-strong stack g12"><h2 style="font-size:18px">Liberar celular</h2><p class="muted" style="font-size:14px">Só a equipe da barraca. Digite o PIN do dono.</p>' +
+      '<div><label class="lbl" for="pin1">PIN</label><input class="input" id="pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn" value="' + esc(S.pinIn) + '"></div>' +
+      '<div class="row g8"><button class="btn btn-primary" style="flex:2" type="submit"' + (S.busy ? ' disabled' : '') + '>Liberar</button><button class="btn btn-ghost" style="flex:1" type="button" data-a="liberarSair">Cancelar</button></div></form></div>';
+  }
+
+  function navCliente(atual) {
+    function b(attrs, label, icon, on) {
+      return '<button' + (on ? ' class="on" aria-current="page"' : '') + ' ' + attrs + '>' + icon + label + '</button>';
+    }
+    return '<nav class="nav nav4" aria-label="Menu do cliente"><div class="inner">' +
+      b('data-a="cview" data-v="menu"', 'Cardápio', I.utensils(), atual === 'menu') +
+      b('data-a="cview" data-v="conta"', 'Minha conta', I.receipt(), atual === 'conta') +
+      b('data-a="chamar" data-t="garcom"', 'Garçom', I.bell(), false) +
+      b('data-a="navFechar"', 'Fechar conta', I.check(), false) +
+      '</div></nav>';
   }
 
   function headerCliente(n, sess, extra) {
     return '<header class="top stack g12"><div class="row between g10">' +
       '<div class="stack g4" style="min-width:0"><div class="disp" style="font-weight:800;font-size:19px">' + esc(S.config.nome) + '</div>' +
       '<div class="loc">' + I.pin(16) + ' Guarda-sol ' + pad2(n) + ' · ' + esc(S.meuNome || sess.nome) + '</div></div>' +
-      '<div class="row g8">' +
-      '<button class="btn btn-secondary btn-sm" data-a="chamar" data-t="garcom" aria-label="Chamar garçom">' + I.bell(18) + '</button>' +
-      '<button class="btn btn-secondary btn-sm" data-a="cview" data-v="conta">' + I.receipt(18) + ' Conta</button>' +
-      '</div></div>' + (extra || '') + '</header>';
+      '</div>' + (extra || '') + '</header>';
   }
 
   function categorias() {
@@ -547,13 +587,13 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     }
     var qtd = S.cart.reduce(function (s, c) { return s + c.qtd; }, 0);
     var tot = S.cart.reduce(function (s, c) { return s + c.qtd * c.preco; }, 0);
-    var bar = qtd ? '<div class="bottom"><div class="inner"><button class="btn btn-primary btn-lg btn-block" style="justify-content:space-between" data-a="cview" data-v="carrinho">' +
+    var bar = qtd ? '<div class="bottom acima"><div class="inner"><button class="btn btn-primary btn-lg btn-block" style="justify-content:space-between" data-a="cview" data-v="carrinho">' +
       '<span class="row g10"><span class="num" style="min-width:28px;height:28px;border-radius:999px;background:#fff;color:var(--button-primary-bg);display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;padding:0 6px">' + qtd + '</span>Ver meu pedido</span>' +
       '<span class="num">' + brl(tot) + '</span></button></div></div>' : '';
     return '<div class="wrap">' + headerCliente(n, sess, chips) +
       '<main class="stack g8" style="padding:12px 16px 20px">' + banners() + bannersRecusa() + statusChamado(sess) +
       '<div class="stack g4" style="margin-top:4px"><h1 style="font-size:24px">Nosso cardápio</h1><p class="muted" style="font-size:14px">Escolha o que deseja e adicione ao seu pedido.</p></div>' + body + '</main>' +
-      (qtd ? '<div class="space-bar"></div>' : rodape()) + bar + '</div>';
+      rodape() + (qtd ? '<div class="space-bar2"></div>' : '<div class="space-nav"></div>') + bar + navCliente('menu') + '</div>';
   }
 
   function viewCarrinho(n, sess) {
@@ -590,7 +630,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     else if (g.pago > 0) st = '<span class="status status-info">Pagou ' + brl(g.pago) + '</span>';
     var acao = '';
     if (comAcoesDono && g.abertos.length) {
-      acao = '<button class="btn btn-secondary btn-block" data-a="pagarParte" data-k="' + esc(g.key) + '"' + (S.busy ? ' disabled' : '') + '>' + I.receipt(18) + ' Receber só de ' + esc(g.nome) + ' · ' + brl(g.emAberto) + '</button>';
+      acao = '<button class="btn btn-secondary btn-block" data-a="pagarParte" data-k="' + esc(g.key) + '"' + (S.busy ? ' disabled' : '') + '>' + I.receipt(18) + ' Receber só de ' + esc(g.nome) + ' · ' + brl(comDesconto(g.emAberto)) + (S.descPct ? ' (−' + S.descPct + '%)' : '') + '</button>';
     }
     return '<div class="pessoa' + (eu ? ' eu' : '') + '"><div class="row between g8"><div class="disp" style="font-weight:700;font-size:17px">' + esc(g.nome) + (eu ? ' <span class="muted" style="font-weight:500;font-size:14px">(você)</span>' : '') + '</div>' + st + '</div>' +
       linhas + (g.pedidos.length ? '<div class="hr"></div><div class="line"><strong>Em aberto</strong><strong class="v">' + brl(g.emAberto) + '</strong></div>' : '') + acao + '</div>';
@@ -607,7 +647,6 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '<div class="loc">' + I.pin(16) + ' Guarda-sol ' + pad2(n) + '</div></div>';
     if (S.enviado) h += '<div class="banner ok stack g4"><span class="row g8">' + I.check(20) + ' Pedido enviado com sucesso!</span><span style="font-weight:400">Agora é só aguardar. O estabelecimento já recebeu seu pedido ' + esc(S.enviado) + '.</span></div>';
     h += '</header><main class="stack g16" style="padding:14px 16px 20px">' + banners() + bannersRecusa() + statusChamado(sess);
-    if (meu && meu.pedidos.length && !meu.abertos.length) h += '<div class="banner ok">Sua parte já foi paga. Obrigado! Se pedir mais, entra numa nova parte.</div>';
     h += pessoaCard(meu || { key: 'eu', nome: S.meuNome || 'Você', pedidos: [], abertos: [], pagos: [], emAberto: 0, pago: 0, itens: { linhas: [] } }, true, false);
     if (outros.length) h += '<p class="sec-t" style="margin-top:4px">Também neste guarda-sol</p>' + outros.map(function (g) { return pessoaCard(g, false, false); }).join('');
     h += '<section class="card stack g10"><div class="line" style="align-items:baseline"><span style="font-weight:600">Total em aberto do guarda-sol</span><span class="big-total">' + brl(emAberto) + '</span></div>' +
@@ -616,11 +655,9 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       '<button class="sbtn dark" data-a="pagantes" data-d="1" aria-label="Mais uma pessoa">' + I.plus(18) + '</button></div></div>' +
       '<div class="line" style="align-items:baseline"><span class="muted">Cada pessoa paga</span><span class="big-total" style="color:var(--color-secondary-dark)">' + brl(emAberto / pagantes) + '</span></div></section>' +
       '<button class="linkbtn" style="align-self:center" data-a="cview" data-v="menu">' + I.plus(18) + ' Pedir mais</button>' +
-      '<div style="height:140px"></div></main>' +
-      '<div class="bottom"><div class="inner stack g10"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">' +
-      '<button class="btn btn-secondary btn-lg" style="font-size:16px" data-a="chamar" data-t="garcom">' + I.bell(20) + ' Chamar garçom</button>' +
-      '<button class="btn btn-primary btn-lg" style="font-size:16px" data-a="modalFechar"' + (emAberto > 0 ? '' : ' disabled') + '>' + I.receipt(20) + ' Fechar a conta</button></div>' +
-      '<p class="muted" style="font-size:13px;text-align:center">Solicitar o fechamento não é o pagamento. A equipe confere e você paga na barraca.</p></div></div></div>';
+      '<button class="btn btn-primary btn-lg btn-block" data-a="navFechar"' + (emAberto > 0 ? '' : ' disabled') + '>' + I.receipt(20) + ' Fechar a conta</button>' +
+      '<p class="muted" style="font-size:13px;text-align:center">Solicitar o fechamento não é o pagamento. A equipe confere e você paga na barraca.</p>' +
+      '</main><div class="space-nav"></div>' + navCliente('conta') + '</div>';
     return h;
   }
 
@@ -887,6 +924,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var fs = S.fechamentos.filter(function (f) { return (f.em || 0) >= ini; });
     var ps = S.pedidos.filter(function (p) { return (p.criadoEm || 0) >= ini; });
     var vendas = fs.reduce(function (t, f) { return t + (Number(f.total) || 0); }, 0);
+    var descontos = fs.reduce(function (t, f) { return t + (Number(f.desconto) || 0); }, 0);
     var contas = {}; fs.forEach(function (f) { if (f.tipo !== 'parcial') contas[f.sid || f.id] = true; });
     var porConta = {}; fs.forEach(function (f) { var k = f.sid || f.id; if (contas[k]) porConta[k] = (porConta[k] || 0) + (Number(f.total) || 0); });
     var nContas = Object.keys(contas).length;
@@ -921,6 +959,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">' +
       tile('Vendas', brl(vendas), 'pagamentos confirmados') + tile('Contas fechadas', nContas, parciais ? parciais + ' pagamento' + (parciais > 1 ? 's' : '') + ' parcia' + (parciais > 1 ? 'is' : 'l') : '') +
       tile('Média por conta', media === null ? '—' : brl(media), '') + tile('Itens vendidos', nItens, ps.length + (ps.length === 1 ? ' pedido feito' : ' pedidos feitos')) + '</div>';
+    if (descontos > 0) h += '<div class="line" style="font-size:14px"><span class="muted">Descontos dados</span><strong class="v">' + brl(descontos) + '</strong></div>';
     if (nAbertas) h += '<div class="banner info">Em aberto agora: <strong class="num">' + brl(emAberto) + '</strong> em ' + nAbertas + ' conta' + (nAbertas > 1 ? 's' : '') + '. Entra nas vendas quando o pagamento for confirmado no fechamento.</div>';
     if (top.length) h += '<section class="stack g12"><h2>Mais vendidos</h2>' + top.map(function (t) {
       return '<div class="stack g6"><div class="line" style="font-size:14px"><span>' + esc(t[0]) + '</span><strong class="v">' + t[1] + '</strong></div>' +
@@ -946,6 +985,14 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     return headerBarraca('QR Codes') + '<main class="stack g16" style="padding:16px">' + banners() +
       '<form data-form="salvarNome" class="card stack g10"><label class="lbl" for="cfg-nome" style="margin:0">Nome da barraca</label>' +
       '<div class="row g8"><input class="input" id="cfg-nome" data-bind="cfgNome" value="' + esc(nomeVal) + '" maxlength="40"><button class="btn btn-dark" type="submit">Salvar</button></div></form>' +
+      '<section class="card stack g10"><div class="row between g8"><span class="lbl" style="margin:0">PIN do dono</span>' + (S.config.pinHash ? '<span class="status status-success">' + I.check(14) + ' Criado</span>' : '<span class="status status-warning">Ainda não criado</span>') + '</div>' +
+      '<p class="muted" style="font-size:13px">Pedido para editar ou cancelar pedidos, dar desconto e liberar o celular de um cliente.</p>' +
+      (S.pinTroca ? '<form data-form="pinTrocar" class="stack g10">' +
+        (S.config.pinHash ? '<div><label class="lbl" for="pin-at">PIN atual</label><input class="input" id="pin-at" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinAtual" value="' + esc(S.pinAtual) + '"></div>' : '') +
+        '<div><label class="lbl" for="pin-nv">Novo PIN (4 a 6 números)</label><input class="input" id="pin-nv" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinNovo" value="' + esc(S.pinNovo) + '"></div>' +
+        '<div><label class="lbl" for="pin-nv2">Repita o novo PIN</label><input class="input" id="pin-nv2" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinNovo2" value="' + esc(S.pinNovo2) + '"></div>' +
+        '<div class="row g8"><button class="btn btn-primary" style="flex:2" type="submit"' + (S.busy ? ' disabled' : '') + '>Salvar PIN</button><button class="btn btn-ghost" style="flex:1" type="button" data-a="pinTrocaAbrir">Cancelar</button></div></form>'
+        : '<button class="btn btn-secondary" data-a="pinTrocaAbrir">' + (S.config.pinHash ? 'Trocar PIN' : 'Criar PIN') + '</button>') + '</section>' +
       '<p class="muted" style="font-size:14px">São ' + POOL + ' plaquinhas fixas, que nunca mudam. As de 01 a ' + pad2(N()) + ' vão nos guarda-sóis do formato. As demais servem para avulsos e guarda-sóis extras, seguindo a sequência.</p>' +
       '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">' + cards + '</div>' +
       '<a href="#" class="btn btn-ghost btn-block">Tela inicial do teste</a></main>';
@@ -957,14 +1004,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     if (!abertos.length) return '';
     if (!S.editConta) return '<button class="btn btn-ghost btn-block" data-a="editAbrir">Editar ou cancelar pedidos (PIN)</button>';
     var h = '<section class="card-strong stack g12">';
-    if (!pinValido()) {
-      var criar = !S.config.pinHash;
-      return h + '<form data-form="pinEntrar" class="stack g12"><h2 style="font-size:18px">' + (criar ? 'Crie o PIN do dono' : 'PIN do dono') + '</h2>' +
-        '<p class="muted" style="font-size:14px">' + (criar ? 'Escolha de 4 a 6 números. Ele será pedido sempre que alguém for editar ou cancelar um pedido.' : 'Para editar ou cancelar pedidos desta conta.') + '</p>' +
-        '<div><label class="lbl" for="pin1">' + (criar ? 'Novo PIN' : 'PIN') + '</label><input class="input" id="pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn" value="' + esc(S.pinIn) + '"></div>' +
-        (criar ? '<div><label class="lbl" for="pin2">Repita o PIN</label><input class="input" id="pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="6" data-bind="pinIn2" value="' + esc(S.pinIn2) + '"></div>' : '') +
-        '<div class="row g8"><button class="btn btn-primary" style="flex:2" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (criar ? 'Criar PIN' : 'Liberar edição') + '</button><button class="btn btn-ghost" style="flex:1" type="button" data-a="editSair">Cancelar</button></div></form></section>';
-    }
+    if (!pinValido()) return h + formPin('editSair', 'Para editar ou cancelar pedidos desta conta.') + '</section>';
     h += '<div class="row between g8"><h2 style="font-size:18px">Editar pedidos em aberto</h2><button class="linkbtn" data-a="editSair">Concluir</button></div>' +
       '<p class="muted" style="font-size:13px">Use − e + para mudar quantidades e toque em Salvar. Pedidos já pagos não aparecem aqui.</p>';
     h += abertos.map(function (p) {
@@ -985,6 +1025,19 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     return h + '</section>';
   }
 
+  function secaoDesconto() {
+    if (!S.descEdit) return '<button class="btn btn-ghost btn-block" data-a="descAbrir">' + (S.descPct ? 'Mudar desconto (' + S.descPct + '%)' : 'Dar desconto (PIN)') + '</button>';
+    if (!pinValido()) return '<section class="card-strong stack g12">' + formPin('descSair', 'Para dar desconto nesta conta.') + '</section>';
+    return '<section class="card-strong stack g12"><div class="row between g8"><h2 style="font-size:18px">Desconto</h2><button class="linkbtn" data-a="descSair">Fechar</button></div>' +
+      '<p class="muted" style="font-size:13px">Vale para o que for recebido agora, na conta inteira ou só na parte de uma pessoa.</p>' +
+      '<div class="row g6" style="flex-wrap:wrap">' + [5, 10, 15, 20].map(function (v) {
+        var on = S.descPct === v;
+        return '<button type="button" class="opt solid' + (on ? ' on' : '') + '" style="min-width:64px" aria-pressed="' + on + '" data-a="descSet" data-v="' + v + '">' + v + '%</button>';
+      }).join('') + '</div>' +
+      '<form data-form="descOutro" class="row g8" style="align-items:flex-end"><div style="flex:1"><label class="lbl" for="desc-in">Outro valor (%)</label><input class="input" id="desc-in" type="number" inputmode="numeric" min="1" max="100" data-bind="descIn" value="' + esc(S.descIn) + '" placeholder="Ex.: 12"></div><button class="btn btn-dark" type="submit">Aplicar</button></form>' +
+      (S.descPct ? '<button class="btn btn-outline-danger btn-sm" data-a="descSet" data-v="0">Tirar o desconto</button>' : '') + '</section>';
+  }
+
   function viewFechar() {
     var n = S.fecharGs, s = S.sessoes['gs-' + n];
     var topo = '<header class="top stack g6"><button class="linkbtn" data-a="voltarFechar">' + I.back() + ' Voltar</button>';
@@ -992,7 +1045,7 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
     var ps = S.pedidos.filter(function (p) { return p.sid === s.sid; });
     var grupos = porPessoa(s, ps);
     var emAberto = grupos.reduce(function (t, g) { return t + g.emAberto; }, 0);
-    var pagoTotal = grupos.reduce(function (t, g) { return t + g.pago; }, 0);
+
     var pend = ps.filter(function (p) { return p.status === 'novo'; }).length;
     var hist = S.fechamentos.filter(function (f) { return f.sid === s.sid; }).sort(function (a, b) { return (a.em || 0) - (b.em || 0); });
     var foco = S.fecharFoco;
@@ -1010,14 +1063,16 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       secaoEditar(ps);
     if (hist.length) {
       h += '<section class="card stack g8"><h2 style="font-size:17px">Pagamentos desta conta</h2>' + hist.map(function (f) {
-        return '<div class="line" style="font-size:14px"><span>' + hora(f.em) + ' · ' + esc(f.quem || '') + ' · ' + (f.tipo === 'parcial' ? 'parcial' : 'restante') + ' · ' + esc(f.pagamento || '') + '</span><span class="v">' + brl(f.total) + '</span></div>';
-      }).join('') + '<div class="hr"></div><div class="line"><strong>Já recebido</strong><strong class="v">' + brl(pagoTotal) + '</strong></div></section>';
+        return '<div class="line" style="font-size:14px"><span>' + hora(f.em) + ' · ' + esc(f.quem || '') + ' · ' + (f.tipo === 'parcial' ? 'parcial' : 'restante') + ' · ' + esc(f.pagamento || '') + (f.descontoPct ? ' · ' + f.descontoPct + '% desc.' : '') + '</span><span class="v">' + brl(f.total) + '</span></div>';
+      }).join('') + '<div class="hr"></div><div class="line"><strong>Já recebido</strong><strong class="v">' + brl(hist.reduce(function (t, f) { return t + (Number(f.total) || 0); }, 0)) + '</strong></div></section>';
     }
     var pag = Math.max(1, s.pagantes || 1);
     h += '<section class="card stack g8"><div class="line" style="align-items:baseline"><span style="font-weight:600">Em aberto</span><span class="big-total" style="font-size:28px">' + brl(emAberto) + '</span></div>' +
-      (pag > 1 ? '<div class="line muted"><span>Cliente pediu para dividir em ' + pag + '</span><span class="v">' + brl(emAberto / pag) + ' cada</span></div>' : '') + '</section>' +
+      (S.descPct && emAberto > 0 ? '<div class="line" style="color:var(--color-secondary-dark)"><span>Desconto de ' + S.descPct + '%</span><span class="v">− ' + brl(emAberto - comDesconto(emAberto)) + '</span></div><div class="line" style="align-items:baseline"><strong>A receber</strong><span class="big-total" style="font-size:28px">' + brl(comDesconto(emAberto)) + '</span></div>' : '') +
+      (pag > 1 ? '<div class="line muted"><span>Cliente pediu para dividir em ' + pag + '</span><span class="v">' + brl(comDesconto(emAberto) / pag) + ' cada</span></div>' : '') + '</section>' +
+      (emAberto > 0 ? secaoDesconto() : '') +
       '<div style="height:110px"></div></main>' +
-      '<div class="bottom"><div class="inner"><button class="btn btn-primary btn-lg btn-block" data-a="pago"' + (S.busy ? ' disabled' : '') + '>' + I.check(22) + (emAberto > 0 ? ' Receber ' + brl(emAberto) + ' e liberar' : ' Liberar guarda-sol') + '</button></div></div></div>';
+      '<div class="bottom"><div class="inner"><button class="btn btn-primary btn-lg btn-block" data-a="pago"' + (S.busy ? ' disabled' : '') + '>' + I.check(22) + (emAberto > 0 ? ' Receber ' + brl(comDesconto(emAberto)) + ' e liberar' : ' Liberar guarda-sol') + '</button></div></div></div>';
     return h;
   }
 
@@ -1065,16 +1120,56 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
         if (s && s.aberta) {
           var sidA = s.sid;
           w(function () { return gsRef(n).update(part); }).then(function (ok) {
-            S.busy = false; if (ok) { S.sid = sidA; LS.set(sidKey(n), sidA); S.cview = 'menu'; S.top = true; } render();
+            S.busy = false; if (ok) { S.sid = sidA; LS.set(sidKey(n), sidA); LS.set(sidEmKey(n), String(Date.now())); S.cview = 'menu'; S.top = true; } render();
           });
           return;
         }
         var sid = novoId('s'), parts = {}; parts[S.pid] = { nome: nome, em: Date.now() };
         w(function () { return gsRef(n).set({ gs: n, aberta: true, nome: nome, sid: sid, desde: Date.now(), chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null, pagantes: 1, participantes: parts }); })
-          .then(function (ok) { S.busy = false; if (ok) { S.sid = sid; LS.set(sidKey(n), sid); S.cview = 'menu'; S.top = true; } render(); });
+          .then(function (ok) { S.busy = false; if (ok) { S.sid = sid; LS.set(sidKey(n), sid); LS.set(sidEmKey(n), String(Date.now())); S.cview = 'menu'; S.top = true; } render(); });
         return;
       }
-      case 'novaConta': LS.del(sidKey(S.route.gs)); S.sid = null; S.cart = []; S.enviado = null; S.pagantes = null; S.top = true; render(); return;
+      case 'novaConta': LS.del(sidKey(S.route.gs)); LS.del(sidEmKey(S.route.gs)); S.sid = null; S.cart = []; S.enviado = null; S.pagantes = null; S.top = true; render(); return;
+      case 'navFechar': {
+        var sn = S.sessoes['gs-' + S.route.gs]; if (!sn) return;
+        var abertoN = porPessoa(sn, S.pedidos.filter(function (p) { return p.sid === S.sid; })).reduce(function (t, g) { return t + g.emAberto; }, 0);
+        if (!(abertoN > 0)) { toast('Sua conta ainda está vazia.'); return; }
+        S.modal = 'fechar'; render(); return;
+      }
+      case 'liberarAbrir': S.liberar = true; S.pinIn = ''; render(); return;
+      case 'liberarSair': S.liberar = false; S.pinIn = ''; render(); return;
+      case 'pinLiberar': {
+        var nL = S.route.gs, sL = S.sessoes['gs-' + nL], tipoL = bloqueio(nL, sL);
+        if (hashPin((S.pinIn || '').trim()) !== S.config.pinHash) { S.pinIn = ''; toast('PIN incorreto.'); render(); return; }
+        S.pinIn = ''; S.liberar = false;
+        if (tipoL === 'parcial') {
+          var upL = {}; upL['participantes.' + S.pid + '.fechadoEm'] = null;
+          S.busy = true; render();
+          w(function () { return gsRef(nL).update(upL); }).then(function (ok) { S.busy = false; if (ok) { S.cview = 'menu'; toast('Celular liberado.'); } render(); });
+          return;
+        }
+        LS.del(sidKey(nL)); LS.del(sidEmKey(nL)); S.sid = null; S.cart = []; S.enviado = null; S.pagantes = null; S.top = true; toast('Celular liberado.'); render(); return;
+      }
+      case 'descAbrir': S.descEdit = true; S.pinIn = ''; S.pinIn2 = ''; render(); return;
+      case 'descSair': S.descEdit = false; S.pinIn = ''; S.pinIn2 = ''; render(); return;
+      case 'descSet': if (!pinValido()) { toast('Digite o PIN de novo.'); S.descEdit = true; render(); return; } S.descPct = +d.v || 0; S.descIn = ''; render(); return;
+      case 'descOutro': {
+        if (!pinValido()) { toast('Digite o PIN de novo.'); render(); return; }
+        var pv = Math.round(Number(String(S.descIn).replace(',', '.')));
+        if (!(pv >= 1 && pv <= 100)) { toast('Digite um desconto de 1 a 100%.'); return; }
+        S.descPct = pv; S.descIn = ''; render(); return;
+      }
+      case 'pinTrocaAbrir': S.pinTroca = !S.pinTroca; S.pinAtual = ''; S.pinNovo = ''; S.pinNovo2 = ''; render(); return;
+      case 'pinTrocar': {
+        var pa = (S.pinAtual || '').trim(), pn = (S.pinNovo || '').trim();
+        if (S.config.pinHash && hashPin(pa) !== S.config.pinHash) { toast('PIN atual incorreto.'); return; }
+        if (!/^\d{4,6}$/.test(pn)) { toast('O PIN tem de 4 a 6 números.'); return; }
+        if (pn !== (S.pinNovo2 || '').trim()) { toast('Os dois PINs novos não são iguais.'); return; }
+        S.busy = true; render();
+        w(function () { return S.db.doc('config/barraca').set({ pinHash: hashPin(pn) }, { merge: true }); })
+          .then(function (ok) { S.busy = false; if (ok) { S.pinTroca = false; S.pinAtual = ''; S.pinNovo = ''; S.pinNovo2 = ''; toast('PIN salvo. Guarde bem esse número.'); } render(); });
+        return;
+      }
       case 'cview': S.cview = d.v; if (d.v !== 'conta') S.enviado = null; S.top = true; render(); return;
       case 'cat': S.cat = d.c; render(); return;
       case 'opcao': S.opcaoSel[d.id] = d.o; render(); return;
@@ -1209,35 +1304,40 @@ header.top{padding:14px 16px 12px;border-bottom:1px solid var(--color-border);ba
       }
       case 'abrirFechar': {
         var ss = S.sessoes['gs-' + d.gs];
-        S.fecharGs = +d.gs; S.fecharFoco = ss && ss.chamado === 'parcial' ? ss.chamadoPid : null; S.pagamento = 'Pix'; S.editConta = false; S.draft = {}; S.confirmCancel = null; S.top = true; render(); return;
+        S.fecharGs = +d.gs; S.fecharFoco = ss && ss.chamado === 'parcial' ? ss.chamadoPid : null; S.pagamento = 'Pix'; S.descPct = 0; S.descEdit = false; S.descIn = ''; S.editConta = false; S.draft = {}; S.confirmCancel = null; S.top = true; render(); return;
       }
-      case 'voltarFechar': S.fecharGs = null; S.editConta = false; S.draft = {}; S.confirmCancel = null; S.pinOkAte = 0; S.top = true; render(); return;
+      case 'voltarFechar': S.fecharGs = null; S.descPct = 0; S.descEdit = false; S.descIn = ''; S.editConta = false; S.draft = {}; S.confirmCancel = null; S.pinOkAte = 0; S.top = true; render(); return;
       case 'pagamento': S.pagamento = d.f; render(); return;
       case 'pagarParte': {
         n = S.fecharGs; s = S.sessoes['gs-' + n]; if (!s || S.busy) return;
         var g = porPessoa(s, S.pedidos.filter(function (x) { return x.sid === s.sid; })).filter(function (x) { return x.key === d.k; })[0];
         if (!g || !g.abertos.length) return;
-        var agora = Date.now(), forma = S.pagamento, valor = g.emAberto, itensP = agregarItens(g.abertos).linhas;
+        var agora = Date.now(), forma = S.pagamento, bruto = g.emAberto, valor = comDesconto(bruto), pctP = S.descPct, itensP = agregarItens(g.abertos).linhas;
         S.busy = true; render();
         w(function () {
           return emSerie(g.abertos, function (p) { return S.db.doc('pedidos/' + p.id).update({ pago: true, pagoEm: agora }); })
-            .then(function () { return S.db.collection('fechamentos').add({ tipo: 'parcial', gs: n, sid: s.sid, pid: g.pid, quem: g.nome, total: valor, pagamento: forma, itens: itensP, em: agora }); })
-            .then(function () { if (s.chamado === 'parcial' && (!s.chamadoPid || s.chamadoPid === g.pid)) return gsRef(n).update({ chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null }); });
-        }).then(function (ok) { S.busy = false; if (ok) { S.fecharFoco = null; toast('Parte de ' + g.nome + ' recebida: ' + brl(valor) + '.'); } render(); });
+            .then(function () { return S.db.collection('fechamentos').add({ tipo: 'parcial', gs: n, sid: s.sid, pid: g.pid || null, quem: g.nome, bruto: bruto, descontoPct: pctP, desconto: Math.round((bruto - valor) * 100) / 100, total: valor, pagamento: forma, itens: itensP, em: agora }); })
+            .then(function () {
+              var up = {};
+              if (s.chamado === 'parcial' && (!s.chamadoPid || s.chamadoPid === g.pid)) { up.chamado = null; up.chamadoEm = null; up.chamadoQuem = null; up.chamadoPid = null; }
+              if (g.pid && s.participantes && s.participantes[g.pid]) up['participantes.' + g.pid + '.fechadoEm'] = agora; // encerra o celular de quem pagou
+              if (Object.keys(up).length) return gsRef(n).update(up);
+            });
+        }).then(function (ok) { S.busy = false; if (ok) { S.fecharFoco = null; toast('Parte de ' + g.nome + ' recebida: ' + brl(valor) + (pctP ? ' (' + pctP + '% de desconto)' : '') + '.'); } render(); });
         return;
       }
       case 'pago': {
         n = S.fecharGs; s = S.sessoes['gs-' + n]; if (!s || S.busy) return;
         var abertos = S.pedidos.filter(function (x) { return x.sid === s.sid && !x.pago; });
-        var agora2 = Date.now(), forma2 = S.pagamento, resto = somaPedidos(abertos);
+        var agora2 = Date.now(), forma2 = S.pagamento, bruto2 = somaPedidos(abertos), resto = comDesconto(bruto2), pct2 = S.descPct;
         var nomes = porPessoa(s, abertos).filter(function (x) { return x.emAberto > 0; }).map(function (x) { return x.nome; }).join(', ');
         S.busy = true; render();
         w(function () {
           return emSerie(abertos, function (p) { return S.db.doc('pedidos/' + p.id).update({ pago: true, pagoEm: agora2 }); })
-            .then(function () { return S.db.collection('fechamentos').add({ tipo: 'total', gs: n, sid: s.sid, quem: nomes || s.nome, total: resto, pagamento: forma2, pagantes: s.pagantes || 1, itens: agregarItens(abertos).linhas, em: agora2 }); })
+            .then(function () { return S.db.collection('fechamentos').add({ tipo: 'total', gs: n, sid: s.sid, quem: nomes || s.nome, bruto: bruto2, descontoPct: pct2, desconto: Math.round((bruto2 - resto) * 100) / 100, total: resto, pagamento: forma2, pagantes: s.pagantes || 1, itens: agregarItens(abertos).linhas, em: agora2 }); })
             .then(function () { return gsRef(n).update({ aberta: false, chamado: null, chamadoEm: null, chamadoQuem: null, chamadoPid: null, pagoEm: agora2 }); })
             .then(function () { var ex = S.extras[n]; if (ex && ex.tipo !== 'extra') return S.db.doc('extras/gs-' + n).delete(); });
-        }).then(function (ok) { S.busy = false; if (ok) { S.fecharGs = null; S.mapaSel = null; toast('Conta fechada. ' + nomeGs(n) + ' liberado.'); } render(); });
+        }).then(function (ok) { S.busy = false; if (ok) { S.fecharGs = null; S.mapaSel = null; S.descPct = 0; S.descEdit = false; toast('Conta fechada. ' + nomeGs(n) + ' liberado.'); } render(); });
         return;
       }
       case 'mapaSel': S.mapaSel = +d.gs; S.confirmExt = null; render(); return;
